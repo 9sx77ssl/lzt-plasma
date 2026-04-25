@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.plasma.lztbalance",
+        "Name": "LZT Market Balance",
+        "Description": "Real-time balance tracker for Lolzteam Market",
+        "Icon": "wallet",
+        "Authors": [
+            {
+                "Name": "gay1234",
+                "Email": "z@gay1234.wtf"
+            }
+        ],
+        "License": "MIT",
+        "Version": "3.1.0",
+        "Website": "https://lolz.live/gay1234"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "KPackageStructure": "Plasma/Applet"
+}

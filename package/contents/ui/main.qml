@@ -1,0 +1,291 @@
+import QtQuick
+import QtQuick.Layouts
+import org.kde.plasma.components as PlasmaComponents
+import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.plasmoid
+import org.kde.kirigami as Kirigami
+
+PlasmoidItem {
+    id: root
+
+    property string rawBalance: "0.00"
+    property string displayText: "0.00"
+    property string displaySymbol: "₽"
+    property string statusText: ""
+    property bool hasError: false
+    property bool hasFetchedOnce: false
+
+    property var currencyRates: ({})
+    property bool pendingRequest: false
+
+    readonly property string apiKey: Plasmoid.configuration.apiKey || ""
+    readonly property int balanceRefreshMs: (Plasmoid.configuration.updateInterval || 30) * 1000
+    readonly property int currencyRefreshMs: (Plasmoid.configuration.currencyRefreshInterval || 300) * 1000
+    readonly property string displayCurrency: Plasmoid.configuration.displayCurrency || "RUB"
+    readonly property string primaryServer: Plasmoid.configuration.apiServer || "https://prod-api.lzt.market"
+    readonly property string fallbackServer: primaryServer === "https://prod-api.lzt.market" ? "https://api.lzt.market" : "https://prod-api.lzt.market"
+
+    readonly property var currencySymbols: ({
+        "RUB": "₽", "USD": "$", "EUR": "€", "UAH": "₴",
+        "GBP": "£", "BYN": "Br", "KZT": "₸", "BTC": "₿"
+    })
+
+    Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            text: i18n("Refresh Balance")
+            icon.name: "view-refresh"
+            onTriggered: root.manualRefresh()
+        }
+    ]
+
+    toolTipMainText: "LZT Market Balance"
+    toolTipSubText: hasError ? statusText : (displayText + " " + displaySymbol)
+
+    preferredRepresentation: compactRepresentation
+
+    compactRepresentation: Item {
+        id: compactRoot
+
+        Layout.minimumWidth: panelRow.implicitWidth
+        Layout.preferredWidth: panelRow.implicitWidth
+
+        RowLayout {
+            id: panelRow
+            anchors.fill: parent
+            spacing: 5
+
+            Image {
+                source: Qt.resolvedUrl("images/lolzteam.png")
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                Layout.alignment: Qt.AlignVCenter
+                smooth: true
+                mipmap: true
+            }
+
+            PlasmaComponents.Label {
+                id: balanceLabel
+                text: {
+                    if (root.hasError) return root.statusText
+                    if (!root.hasFetchedOnce) return "..."
+                    return root.displayText + root.displaySymbol
+                }
+                color: root.hasError ? "#884444" : "#2BAD72"
+                font.bold: true
+                font.pixelSize: 14
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
+    }
+
+    fullRepresentation: Item {}
+
+    Timer {
+        id: balanceTimer
+        interval: root.balanceRefreshMs
+        running: root.apiKey.length > 0
+        repeat: true
+        onTriggered: root.silentFetchBalance()
+    }
+
+    Timer {
+        id: currencyTimer
+        interval: root.currencyRefreshMs
+        running: root.apiKey.length > 0 && root.displayCurrency !== "RUB"
+        repeat: true
+        onTriggered: root.fetchCurrencyRates()
+    }
+
+    Component.onCompleted: {
+        if (apiKey.length > 0) {
+            if (displayCurrency !== "RUB") fetchCurrencyRates()
+            silentFetchBalance()
+        } else {
+            statusText = "No API Key"
+            hasError = true
+        }
+    }
+
+    Connections {
+        target: Plasmoid.configuration
+
+        function onApiKeyChanged() {
+            if (root.apiKey.length > 0) {
+                root.hasFetchedOnce = false
+                if (root.displayCurrency !== "RUB") root.fetchCurrencyRates()
+                root.silentFetchBalance()
+            } else {
+                root.statusText = "No API Key"
+                root.hasError = true
+            }
+        }
+
+        function onUpdateIntervalChanged() {
+            balanceTimer.restart()
+        }
+
+        function onDisplayCurrencyChanged() {
+            root.displaySymbol = root.currencySymbols[root.displayCurrency] || root.displayCurrency
+            if (root.displayCurrency !== "RUB") {
+                root.fetchCurrencyRates()
+            }
+            root.recalcDisplay()
+        }
+
+        function onCurrencyRefreshIntervalChanged() {
+            currencyTimer.restart()
+        }
+
+        function onApiServerChanged() {
+            root.silentFetchBalance()
+        }
+    }
+
+    function manualRefresh() {
+        if (displayCurrency !== "RUB") fetchCurrencyRates()
+        silentFetchBalance()
+    }
+
+    function silentFetchBalance() {
+        if (apiKey.length === 0) {
+            statusText = "No API Key"
+            hasError = true
+            return
+        }
+        if (pendingRequest) return
+        doFetchBalance(primaryServer, true)
+    }
+
+    function doFetchBalance(server, canFallback) {
+        pendingRequest = true
+
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 8000
+
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+
+            if (xhr.status === 200) {
+                parseBalanceResponse(xhr.responseText)
+                pendingRequest = false
+            } else if (xhr.status === 401) {
+                statusText = "Bad Token"
+                hasError = true
+                pendingRequest = false
+            } else if (canFallback && xhr.status !== 401) {
+                doFetchBalance(fallbackServer, false)
+            } else {
+                if (xhr.status === 429) statusText = "Rate Limit"
+                else if (xhr.status === 0) statusText = "Offline"
+                else statusText = "Error"
+                if (!hasFetchedOnce) hasError = true
+                pendingRequest = false
+            }
+        }
+
+        xhr.ontimeout = function() {
+            if (canFallback) {
+                doFetchBalance(fallbackServer, false)
+            } else {
+                if (!hasFetchedOnce) {
+                    statusText = "Timeout"
+                    hasError = true
+                }
+                pendingRequest = false
+            }
+        }
+
+        xhr.open("GET", server + "/me")
+        xhr.setRequestHeader("Accept", "application/json")
+        xhr.setRequestHeader("Authorization", "Bearer " + apiKey)
+        xhr.send()
+    }
+
+    function parseBalanceResponse(raw) {
+        try {
+            var data = JSON.parse(raw)
+            var user = data.user
+            rawBalance = user.balance || "0.00"
+            hasFetchedOnce = true
+            hasError = false
+            statusText = ""
+            recalcDisplay()
+        } catch (e) {
+            if (!hasFetchedOnce) {
+                statusText = "Error"
+                hasError = true
+            }
+        }
+    }
+
+    function recalcDisplay() {
+        displaySymbol = currencySymbols[displayCurrency] || displayCurrency
+
+        if (displayCurrency === "RUB") {
+            displayText = formatNumber(parseFloat(rawBalance))
+            return
+        }
+
+        var rubRate = currencyRates[displayCurrency]
+        if (!rubRate || rubRate <= 0) {
+            displayText = formatNumber(parseFloat(rawBalance))
+            displaySymbol = "₽"
+            return
+        }
+
+        var converted = parseFloat(rawBalance) / rubRate
+        displayText = formatNumber(converted)
+    }
+
+    function formatNumber(value) {
+        if (isNaN(value)) return "0.00"
+        if (value >= 1000) return value.toFixed(0)
+        if (value >= 100) return value.toFixed(1)
+        if (value >= 1) return value.toFixed(2)
+        return value.toFixed(4)
+    }
+
+    function fetchCurrencyRates() {
+        if (apiKey.length === 0) return
+        doFetchCurrency(primaryServer, true)
+    }
+
+    function doFetchCurrency(server, canFallback) {
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+
+            if (xhr.status === 200) {
+                parseCurrencyResponse(xhr.responseText)
+            } else if (canFallback && xhr.status !== 401) {
+                doFetchCurrency(fallbackServer, false)
+            }
+        }
+
+        xhr.ontimeout = function() {
+            if (canFallback) doFetchCurrency(fallbackServer, false)
+        }
+
+        xhr.open("GET", server + "/currency")
+        xhr.setRequestHeader("Accept", "application/json")
+        xhr.setRequestHeader("Authorization", "Bearer " + apiKey)
+        xhr.send()
+    }
+
+    function parseCurrencyResponse(raw) {
+        try {
+            var data = JSON.parse(raw)
+            var list = data.currencyList
+            var rates = {}
+            for (var key in list) {
+                if (list.hasOwnProperty(key)) {
+                    rates[key] = list[key].rate
+                }
+            }
+            currencyRates = rates
+            recalcDisplay()
+        } catch (e) {}
+    }
+}
