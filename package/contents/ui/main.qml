@@ -44,41 +44,36 @@ PlasmoidItem {
 
     preferredRepresentation: compactRepresentation
 
-    compactRepresentation: Item {
-        id: compactRoot
+    compactRepresentation: RowLayout {
+        id: panelRow
+        spacing: 5
 
-        implicitWidth: panelRow.implicitWidth
-        implicitHeight: panelRow.implicitHeight
-        Layout.minimumWidth: panelRow.implicitWidth
-        Layout.preferredWidth: panelRow.implicitWidth
-
-        RowLayout {
-            id: panelRow
-            anchors.centerIn: parent
-            spacing: 5
-
-            Image {
-                source: Qt.resolvedUrl("images/lolzteam.png")
-                Layout.preferredWidth: 18
-                Layout.preferredHeight: 18
-                Layout.alignment: Qt.AlignVCenter
-                smooth: true
-                mipmap: true
-            }
-
-            PlasmaComponents.Label {
-                id: balanceLabel
-                text: {
-                    if (root.hasError) return root.statusText
-                    if (!root.hasFetchedOnce) return "..."
-                    return root.displayText + root.displaySymbol
-                }
-                color: root.hasError ? "#884444" : "#2BAD72"
-                font.bold: true
-                font.pixelSize: 14
-                Layout.alignment: Qt.AlignVCenter
-            }
+        Image {
+            source: Qt.resolvedUrl("images/lolzteam.png")
+            Layout.preferredWidth: 18
+            Layout.preferredHeight: 18
+            Layout.alignment: Qt.AlignVCenter
+            smooth: true
+            mipmap: true
         }
+
+        PlasmaComponents.Label {
+            id: balanceLabel
+            text: {
+                if (root.hasError) return root.statusText
+                if (!root.hasFetchedOnce) return "..."
+                return root.displayText + root.displaySymbol
+            }
+            color: root.hasError ? "#884444" : "#2BAD72"
+            font.bold: true
+            font.pixelSize: 14
+            Layout.alignment: Qt.AlignVCenter
+        }
+    }
+
+    fullRepresentation: Item {
+        Layout.preferredWidth: 0
+        Layout.preferredHeight: 0
     }
 
     Timer {
