@@ -14,9 +14,10 @@ PlasmoidItem {
     property string statusText: ""
     property bool hasError: false
     property bool hasFetchedOnce: false
+    property bool pendingBalance: false
+    property bool pendingCurrency: false
 
     property var currencyRates: ({})
-    property bool pendingRequest: false
 
     readonly property string apiKey: Plasmoid.configuration.apiKey || ""
     readonly property int balanceRefreshMs: (Plasmoid.configuration.updateInterval || 30) * 1000
@@ -46,12 +47,14 @@ PlasmoidItem {
     compactRepresentation: Item {
         id: compactRoot
 
+        implicitWidth: panelRow.implicitWidth
+        implicitHeight: panelRow.implicitHeight
         Layout.minimumWidth: panelRow.implicitWidth
         Layout.preferredWidth: panelRow.implicitWidth
 
         RowLayout {
             id: panelRow
-            anchors.fill: parent
+            anchors.centerIn: parent
             spacing: 5
 
             Image {
@@ -77,8 +80,6 @@ PlasmoidItem {
             }
         }
     }
-
-    fullRepresentation: Item {}
 
     Timer {
         id: balanceTimer
@@ -142,6 +143,7 @@ PlasmoidItem {
     }
 
     function manualRefresh() {
+        if (pendingBalance) return
         if (displayCurrency !== "RUB") fetchCurrencyRates()
         silentFetchBalance()
     }
@@ -152,12 +154,12 @@ PlasmoidItem {
             hasError = true
             return
         }
-        if (pendingRequest) return
+        if (pendingBalance) return
         doFetchBalance(primaryServer, true)
     }
 
     function doFetchBalance(server, canFallback) {
-        pendingRequest = true
+        pendingBalance = true
 
         var xhr = new XMLHttpRequest()
         xhr.timeout = 8000
@@ -167,19 +169,19 @@ PlasmoidItem {
 
             if (xhr.status === 200) {
                 parseBalanceResponse(xhr.responseText)
-                pendingRequest = false
+                pendingBalance = false
             } else if (xhr.status === 401) {
                 statusText = "Bad Token"
                 hasError = true
-                pendingRequest = false
-            } else if (canFallback && xhr.status !== 401) {
+                pendingBalance = false
+            } else if (canFallback) {
                 doFetchBalance(fallbackServer, false)
             } else {
                 if (xhr.status === 429) statusText = "Rate Limit"
                 else if (xhr.status === 0) statusText = "Offline"
-                else statusText = "Error"
+                else statusText = "Err " + xhr.status
                 if (!hasFetchedOnce) hasError = true
-                pendingRequest = false
+                pendingBalance = false
             }
         }
 
@@ -191,7 +193,7 @@ PlasmoidItem {
                     statusText = "Timeout"
                     hasError = true
                 }
-                pendingRequest = false
+                pendingBalance = false
             }
         }
 
@@ -204,15 +206,16 @@ PlasmoidItem {
     function parseBalanceResponse(raw) {
         try {
             var data = JSON.parse(raw)
-            var user = data.user
-            rawBalance = user.balance || "0.00"
+            if (!data || !data.user) throw new Error("bad response")
+            var bal = data.user.balance
+            rawBalance = (bal !== undefined && bal !== null) ? String(bal) : "0.00"
             hasFetchedOnce = true
             hasError = false
             statusText = ""
             recalcDisplay()
         } catch (e) {
             if (!hasFetchedOnce) {
-                statusText = "Error"
+                statusText = "Parse Err"
                 hasError = true
             }
         }
@@ -221,20 +224,22 @@ PlasmoidItem {
     function recalcDisplay() {
         displaySymbol = currencySymbols[displayCurrency] || displayCurrency
 
+        var bal = parseFloat(rawBalance)
+        if (isNaN(bal)) bal = 0
+
         if (displayCurrency === "RUB") {
-            displayText = formatNumber(parseFloat(rawBalance))
+            displayText = formatNumber(bal)
             return
         }
 
-        var rubRate = currencyRates[displayCurrency]
-        if (!rubRate || rubRate <= 0) {
-            displayText = formatNumber(parseFloat(rawBalance))
+        var rate = currencyRates[displayCurrency]
+        if (!rate || rate <= 0) {
+            displayText = formatNumber(bal)
             displaySymbol = "₽"
             return
         }
 
-        var converted = parseFloat(rawBalance) / rubRate
-        displayText = formatNumber(converted)
+        displayText = formatNumber(bal / rate)
     }
 
     function formatNumber(value) {
@@ -246,11 +251,13 @@ PlasmoidItem {
     }
 
     function fetchCurrencyRates() {
-        if (apiKey.length === 0) return
+        if (apiKey.length === 0 || pendingCurrency) return
         doFetchCurrency(primaryServer, true)
     }
 
     function doFetchCurrency(server, canFallback) {
+        pendingCurrency = true
+
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
 
@@ -259,13 +266,20 @@ PlasmoidItem {
 
             if (xhr.status === 200) {
                 parseCurrencyResponse(xhr.responseText)
-            } else if (canFallback && xhr.status !== 401) {
+                pendingCurrency = false
+            } else if (canFallback) {
                 doFetchCurrency(fallbackServer, false)
+            } else {
+                pendingCurrency = false
             }
         }
 
         xhr.ontimeout = function() {
-            if (canFallback) doFetchCurrency(fallbackServer, false)
+            if (canFallback) {
+                doFetchCurrency(fallbackServer, false)
+            } else {
+                pendingCurrency = false
+            }
         }
 
         xhr.open("GET", server + "/currency")
@@ -277,10 +291,11 @@ PlasmoidItem {
     function parseCurrencyResponse(raw) {
         try {
             var data = JSON.parse(raw)
+            if (!data || !data.currencyList) throw new Error("bad response")
             var list = data.currencyList
             var rates = {}
             for (var key in list) {
-                if (list.hasOwnProperty(key)) {
+                if (list.hasOwnProperty(key) && list[key].rate > 0) {
                     rates[key] = list[key].rate
                 }
             }
