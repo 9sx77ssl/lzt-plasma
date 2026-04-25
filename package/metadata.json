@@ -3,11 +3,11 @@
         "Id": "org.kde.plasma.lztbalance",
         "Name": "LZT Market Balance",
         "Description": "Real-time balance tracker for Lolzteam Market",
-        "Icon": "wallet",
+        "Icon": "lztbalance",
         "Authors": [
             {
                 "Name": "gay1234",
-                "Email": "z@gay1234.wtf"
+                "Email": ""
             }
         ],
         "License": "MIT",

@@ -11,6 +11,10 @@ else
     exit 1
 fi
 
+ICON_DIR="$HOME/.local/share/icons/hicolor/64x64/apps"
+mkdir -p "$ICON_DIR"
+cp package/contents/ui/images/lolzteam.png "$ICON_DIR/lztbalance.png"
+
 $TOOL -t Plasma/Applet -u package/ 2>/dev/null || $TOOL -t Plasma/Applet -i package/
 
 if command -v kbuildsycoca6 &>/dev/null; then
