@@ -94,80 +94,144 @@ PlasmoidItem {
         id: transferWindow
         title: "Transfer Money"
         width: 320
-        height: 420
+        height: 400
         visible: false
         flags: Qt.Dialog | Qt.WindowCloseButtonHint
-        color: "#303030"
 
         Rectangle {
             anchors.fill: parent
-            color: "#303030"
+            color: "#1a1a1a"
 
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 20
-                spacing: 12
+                spacing: 14
 
-                Kirigami.Heading {
-                    text: "Send Money"
-                    level: 2
-                    color: "#2BAD72"
-                    Layout.alignment: Qt.AlignHCenter
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 36
+                    color: "#252525"
+                    radius: 6
+
+                    QQC2.TextField {
+                        id: amountField
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        placeholderText: "Amount"
+                        validator: DoubleValidator { bottom: 0.01; decimals: 4 }
+                        onTextChanged: root.transferAmount = text
+                        color: "#ffffff"
+                        font.bold: true
+                        font.pixelSize: 13
+                        background: Item {}
+                    }
                 }
 
-                QQC2.TextField {
-                    id: amountField
+                Rectangle {
                     Layout.fillWidth: true
-                    placeholderText: "Amount"
-                    validator: DoubleValidator { bottom: 0.01; decimals: 4 }
-                    onTextChanged: root.transferAmount = text
-                    color: "#ffffff"
-                    background: Rectangle { color: "#272727"; radius: 4 }
-                }
+                    height: 36
+                    color: "#252525"
+                    radius: 6
 
-                QQC2.ComboBox {
-                    id: currencyCombo
-                    Layout.fillWidth: true
-                    model: ["RUB", "USD", "EUR", "UAH", "GBP", "BYN", "KZT", "BTC"]
-                    currentIndex: 0
-                    onCurrentTextChanged: root.transferCurrency = currentText
+                    QQC2.ComboBox {
+                        id: currencyCombo
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        model: ["RUB", "USD", "EUR", "UAH", "GBP", "BYN", "KZT", "BTC"]
+                        currentIndex: 0
+                        onCurrentTextChanged: root.transferCurrency = currentText
+                        background: Item {}
+                    }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    QQC2.Button {
-                        text: "By ID"
-                        checked: root.transferUseId
-                        onClicked: root.transferUseId = true
-                        background: Rectangle { color: checked ? "#2BAD72" : "#272727"; radius: 4 }
+                    spacing: 8
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 36
+                        color: transferUseId ? "#2BAD72" : "#252525"
+                        radius: 6
+
+                        QQC2.Button {
+                            anchors.fill: parent
+                            text: "By ID"
+                            flat: true
+                            onClicked: root.transferUseId = true
+                            font.bold: true
+                            contentItem: Text {
+                                text: parent.text
+                                color: "#ffffff"
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Item {}
+                        }
                     }
-                    QQC2.Button {
-                        text: "By Username"
-                        checked: !root.transferUseId
-                        onClicked: root.transferUseId = false
-                        background: Rectangle { color: checked ? "#2BAD72" : "#272727"; radius: 4 }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 36
+                        color: !transferUseId ? "#2BAD72" : "#252525"
+                        radius: 6
+
+                        QQC2.Button {
+                            anchors.fill: parent
+                            text: "By Username"
+                            flat: true
+                            onClicked: root.transferUseId = false
+                            font.bold: true
+                            contentItem: Text {
+                                text: parent.text
+                                color: "#ffffff"
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Item {}
+                        }
                     }
                 }
 
-                QQC2.TextField {
-                    id: userField
+                Rectangle {
                     Layout.fillWidth: true
-                    placeholderText: root.transferUseId ? "User ID" : "Username"
-                    onTextChanged: {
-                        if (root.transferUseId) root.transferUserId = text
-                        else root.transferUsername = text
+                    height: 36
+                    color: "#252525"
+                    radius: 6
+
+                    QQC2.TextField {
+                        id: userField
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        placeholderText: root.transferUseId ? "User ID" : "Username"
+                        onTextChanged: {
+                            if (root.transferUseId) root.transferUserId = text
+                            else root.transferUsername = text
+                        }
+                        color: "#ffffff"
+                        font.bold: true
+                        font.pixelSize: 13
+                        background: Item {}
                     }
-                    color: "#ffffff"
-                    background: Rectangle { color: "#272727"; radius: 4 }
                 }
 
-                QQC2.TextField {
-                    id: commentField
+                Rectangle {
                     Layout.fillWidth: true
-                    placeholderText: "Comment (optional)"
-                    onTextChanged: root.transferComment = text
-                    color: "#ffffff"
-                    background: Rectangle { color: "#272727"; radius: 4 }
+                    height: 36
+                    color: "#252525"
+                    radius: 6
+
+                    QQC2.TextField {
+                        id: commentField
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        placeholderText: "Comment (optional)"
+                        onTextChanged: root.transferComment = text
+                        color: "#ffffff"
+                        font.bold: true
+                        font.pixelSize: 13
+                        background: Item {}
+                    }
                 }
 
                 PlasmaComponents.Label {
@@ -175,35 +239,58 @@ PlasmoidItem {
                     color: root.transferSuccess ? "#2BAD72" : "#884444"
                     visible: root.transferStatus.length > 0
                     Layout.alignment: Qt.AlignHCenter
-                    font.pixelSize: 11
+                    font.pixelSize: 12
+                    font.bold: true
                 }
 
                 RowLayout {
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 10
 
-                    QQC2.Button {
-                        text: "Send"
-                        enabled: !root.pendingTransfer && amountField.text.length > 0 && userField.text.length > 0
-                        onClicked: root.sendTransfer()
-                        background: Rectangle { color: "#2BAD72"; radius: 4 }
-                        contentItem: Text {
-                            text: parent.text
-                            color: "#ffffff"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                    Rectangle {
+                        Layout.preferredWidth: 110
+                        Layout.preferredHeight: 36
+                        color: "#2BAD72"
+                        radius: 6
+
+                        QQC2.Button {
+                            anchors.fill: parent
+                            text: "Send"
+                            enabled: !root.pendingTransfer && amountField.text.length > 0 && userField.text.length > 0
+                            onClicked: root.sendTransfer()
+                            flat: true
+                            font.bold: true
+                            contentItem: Text {
+                                text: parent.text
+                                color: "#ffffff"
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Item {}
                         }
                     }
 
-                    QQC2.Button {
-                        text: "Close"
-                        onClicked: transferWindow.close()
-                        background: Rectangle { color: "#272727"; radius: 4 }
-                        contentItem: Text {
-                            text: parent.text
-                            color: "#ffffff"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                    Rectangle {
+                        Layout.preferredWidth: 110
+                        Layout.preferredHeight: 36
+                        color: "#252525"
+                        radius: 6
+
+                        QQC2.Button {
+                            anchors.fill: parent
+                            text: "Close"
+                            onClicked: transferWindow.close()
+                            flat: true
+                            font.bold: true
+                            contentItem: Text {
+                                text: parent.text
+                                color: "#ffffff"
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Item {}
                         }
                     }
                 }
