@@ -19,7 +19,7 @@ Plasmoid that shows your [Lolzteam Market](https://lzt.market) balance in the pa
 One-line install (always latest version):
 
 ```bash
-sh -c "$(curl -sS https://raw.githubusercontent.com/9sx77ssl/lzt-plasma/main/install-web.sh)"
+sh -c "$(curl -sS https://raw.githubusercontent.com/9sx77ssl/lzt-plasma/main/install.sh)"
 ```
 
 Or manual install:
