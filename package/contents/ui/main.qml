@@ -107,36 +107,36 @@ PlasmoidItem {
                 anchors.margins: 20
                 spacing: 14
 
-                RowLayout {
+                Rectangle {
                     Layout.fillWidth: true
-                    spacing: 8
+                    height: 40
+                    color: "#252525"
+                    radius: 6
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 36
-                        color: "#252525"
-                        radius: 6
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        spacing: 4
 
                         QQC2.TextField {
                             id: amountField
-                            anchors.fill: parent
-                            anchors.margins: 6
+                            Layout.fillWidth: true
                             placeholderText: "Amount"
-                            validator: DoubleValidator { bottom: 0.01; decimals: 4 }
+                            validator: DoubleValidator { bottom: 1; decimals: 4 }
                             onTextChanged: root.transferAmount = text
                             color: "#ffffff"
                             font.bold: true
                             font.pixelSize: 13
                             background: Item {}
                         }
-                    }
 
-                    PlasmaComponents.Label {
-                        text: currencySymbols[displayCurrency] || displayCurrency
-                        color: "#2BAD72"
-                        font.bold: true
-                        font.pixelSize: 16
-                        Layout.alignment: Qt.AlignVCenter
+                        PlasmaComponents.Label {
+                            text: currencySymbols[displayCurrency] || displayCurrency
+                            color: "#2BAD72"
+                            font.bold: true
+                            font.pixelSize: 14
+                            Layout.alignment: Qt.AlignVCenter
+                        }
                     }
                 }
 
@@ -145,7 +145,7 @@ PlasmoidItem {
                     spacing: 8
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: 40
                         color: transferUseId ? "#2BAD72" : "#252525"
                         radius: 6
 
@@ -167,7 +167,7 @@ PlasmoidItem {
                     }
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: 40
                         color: !transferUseId ? "#2BAD72" : "#252525"
                         radius: 6
 
@@ -191,7 +191,7 @@ PlasmoidItem {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 36
+                    height: 40
                     color: "#252525"
                     radius: 6
 
@@ -213,7 +213,7 @@ PlasmoidItem {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 36
+                    height: 40
                     color: "#252525"
                     radius: 6
 
@@ -221,8 +221,13 @@ PlasmoidItem {
                         id: commentField
                         anchors.fill: parent
                         anchors.margins: 6
-                        placeholderText: "Comment (optional)"
-                        onTextChanged: root.transferComment = text
+                        placeholderText: "Comment (optional, max 255)"
+                        onTextChanged: {
+                            if (text.length > 255) {
+                                text = text.substring(0, 255)
+                            }
+                            root.transferComment = text
+                        }
                         color: "#ffffff"
                         font.bold: true
                         font.pixelSize: 13
@@ -245,7 +250,7 @@ PlasmoidItem {
 
                     Rectangle {
                         Layout.preferredWidth: 110
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: 40
                         color: "#2BAD72"
                         radius: 6
 
@@ -269,7 +274,7 @@ PlasmoidItem {
 
                     Rectangle {
                         Layout.preferredWidth: 110
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: 40
                         color: "#252525"
                         radius: 6
 
