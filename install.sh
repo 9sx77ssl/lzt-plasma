@@ -100,7 +100,7 @@ restart_plasma() {
 
 if [ -d "$SCRIPT_DIR/.git" ] && [ "$(cd "$SCRIPT_DIR" && git remote get-url origin 2>/dev/null)" = "https://github.com/$REPO.git" ]; then
     cd "$SCRIPT_DIR"
-    git pull --depth 1 2>/dev/null || true
+    git pull --depth 1 2>/dev/null
 else
     mkdir -p "$INSTALL_DIR" 2>/dev/null || report_error "Cannot create install directory"
     cd "$INSTALL_DIR" || report_error "Cannot enter install directory"
@@ -108,21 +108,21 @@ else
     if command -v git &>/dev/null; then
         if [ -d "lzt-plasma/.git" ]; then
             cd lzt-plasma
-            git pull --depth 1 2>/dev/null || true
+            git pull --depth 1 2>/dev/null
         else
-            rm -rf lzt-plasma 2>/dev/null || true
+            rm -rf lzt-plasma 2>/dev/null
             git clone --depth 1 "https://github.com/$REPO.git" lzt-plasma 2>/dev/null || report_error "Git clone failed"
             cd lzt-plasma || report_error "Cannot enter lzt-plasma directory"
         fi
     elif command -v curl &>/dev/null; then
         curl -sSLO "https://github.com/$REPO/archive/refs/heads/main.tar.gz" 2>/dev/null || report_error "Curl download failed"
         tar -xzf main.tar.gz 2>/dev/null || report_error "Tar extraction failed"
-        rm main.tar.gz 2>/dev/null || true
+        rm main.tar.gz 2>/dev/null
         cd lzt-plasma-main || report_error "Cannot enter lzt-plasma-main directory"
     elif command -v wget &>/dev/null; then
         wget -q "https://github.com/$REPO/archive/refs/heads/main.tar.gz" 2>/dev/null || report_error "Wget download failed"
         tar -xzf main.tar.gz 2>/dev/null || report_error "Tar extraction failed"
-        rm main.tar.gz 2>/dev/null || true
+        rm main.tar.gz 2>/dev/null
         cd lzt-plasma-main || report_error "Cannot enter lzt-plasma-main directory"
     else
         report_error "git, curl, or wget required"
@@ -146,17 +146,17 @@ else
 fi
 
 ICON_DIR="$HOME/.local/share/icons/hicolor/64x64/apps"
-mkdir -p "$ICON_DIR" 2>/dev/null || true
-cp package/contents/ui/images/lolzteam.png "$ICON_DIR/lztbalance.png" 2>/dev/null || true
+mkdir -p "$ICON_DIR" 2>/dev/null
+cp package/contents/ui/images/lolzteam.png "$ICON_DIR/lztbalance.png" 2>/dev/null
 
-$TOOL -t Plasma/Applet -u package/ 2>/dev/null || $TOOL -t Plasma/Applet -i package/ 2>/dev/null || report_error "kpackagetool install failed"
+$TOOL -t Plasma/Applet -u package/ >/dev/null 2>&1 || $TOOL -t Plasma/Applet -i package/ >/dev/null 2>&1 || report_error "kpackagetool install failed"
 
 if command -v kbuildsycoca6 &>/dev/null; then
-    kbuildsycoca6 2>/dev/null || true
+    kbuildsycoca6 2>/dev/null
 elif command -v kbuildsycoca5 &>/dev/null; then
-    kbuildsycoca5 2>/dev/null || true
+    kbuildsycoca5 2>/dev/null
 fi
 
-rm -rf "$INSTALL_DIR" 2>/dev/null || true
+rm -rf "$INSTALL_DIR" 2>/dev/null
 echo "Successfully Installed ^.^"
 restart_plasma
