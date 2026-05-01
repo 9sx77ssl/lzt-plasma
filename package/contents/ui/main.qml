@@ -96,7 +96,7 @@ PlasmoidItem {
         width: 320
         height: 400
         minimumWidth: 320
-        minimumHeight: 400
+        minimumHeight: 300
         visible: false
         flags: Qt.Dialog | Qt.WindowCloseButtonHint
 
