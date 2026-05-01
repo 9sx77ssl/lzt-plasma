@@ -24,14 +24,32 @@ report_error() {
 detect_distro() {
     if [ -f /etc/arch-release ]; then
         echo "arch"
+    elif [ -f /etc/artix-release ]; then
+        echo "arch"
+    elif [ -f /etc/endeavouros-release ]; then
+        echo "arch"
+    elif [ -f /etc/manjaro-release ]; then
+        echo "arch"
+    elif [ -f /etc/garuda-release ]; then
+        echo "arch"
     elif [ -f /etc/debian_version ]; then
         echo "debian"
+    elif [ -f /etc/lsb-release ] && grep -q "Ubuntu" /etc/lsb-release 2>/dev/null; then
+        echo "ubuntu"
+    elif [ -f /etc/lsb-release ] && grep -q "Mint" /etc/lsb-release 2>/dev/null; then
+        echo "debian"
+    elif [ -f /etc/lsb-release ] && grep -q "Pop" /etc/lsb-release 2>/dev/null; then
+        echo "ubuntu"
     elif [ -f /etc/fedora-release ]; then
         echo "fedora"
     elif [ -f /etc/almalinux-release ] || [ -f /etc/rocky-release ]; then
         echo "rhel"
+    elif [ -f /etc/centos-release ]; then
+        echo "rhel"
     elif [ -f /etc/opensuse-release ]; then
         echo "opensuse"
+    elif [ -f /etc/kdeneon-release ]; then
+        echo "ubuntu"
     else
         echo "unknown"
     fi
@@ -68,6 +86,16 @@ install_deps() {
             fi
             ;;
     esac
+}
+
+restart_plasma() {
+    if command -v kquitapp6 &>/dev/null && command -v kstart &>/dev/null; then
+        kquitapp6 plasmashell 2>/dev/null || true
+        sleep 2
+        kstart plasmashell 2>/dev/null || true
+    elif command -v plasmashell &>/dev/null; then
+        plasmashell --replace 2>/dev/null || true
+    fi
 }
 
 if [ -d "$SCRIPT_DIR/.git" ] && [ "$(cd "$SCRIPT_DIR" && git remote get-url origin 2>/dev/null)" = "https://github.com/$REPO.git" ]; then
@@ -130,5 +158,5 @@ elif command -v kbuildsycoca5 &>/dev/null; then
 fi
 
 rm -rf "$INSTALL_DIR" 2>/dev/null || true
-echo "Successfully installed. Restart Plasma:"
-echo "  kquitapp6 plasmashell && kstart plasmashell"
+echo "Successfully Installed ^.^"
+restart_plasma
