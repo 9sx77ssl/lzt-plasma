@@ -32,6 +32,10 @@ detect_distro() {
         echo "arch"
     elif [ -f /etc/garuda-release ]; then
         echo "arch"
+    elif [ -f /etc/cachyos-release ]; then
+        echo "arch"
+    elif [ -f /etc/gentoo-release ]; then
+        echo "gentoo"
     elif [ -f /etc/debian_version ]; then
         echo "debian"
     elif [ -f /etc/lsb-release ] && grep -q "Ubuntu" /etc/lsb-release 2>/dev/null; then
@@ -62,6 +66,11 @@ install_deps() {
         arch)
             if command -v pacman &>/dev/null; then
                 sudo pacman -S --needed --noconfirm plasma-framework git curl wget 2>/dev/null || true
+            fi
+            ;;
+        gentoo)
+            if command -v emerge &>/dev/null; then
+                sudo emerge -q kde-plasma/plasma-framework dev-vcs/git net-misc/curl net-misc/wget 2>/dev/null || true
             fi
             ;;
         debian|ubuntu)
