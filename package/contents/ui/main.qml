@@ -95,6 +95,8 @@ PlasmoidItem {
         title: "Transfer Money"
         width: 320
         height: 400
+        minimumWidth: 320
+        minimumHeight: 400
         visible: false
         flags: Qt.Dialog | Qt.WindowCloseButtonHint
 
