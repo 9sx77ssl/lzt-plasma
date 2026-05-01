@@ -25,7 +25,7 @@ PlasmoidItem {
 
     // Transfer form properties
     property string transferAmount: ""
-    property string transferCurrency: "RUB"
+    property string transferCurrency: displayCurrency
     property bool transferUseId: true
     property string transferUserId: ""
     property string transferUsername: ""
@@ -107,40 +107,36 @@ PlasmoidItem {
                 anchors.margins: 20
                 spacing: 14
 
-                Rectangle {
+                RowLayout {
                     Layout.fillWidth: true
-                    height: 36
-                    color: "#252525"
-                    radius: 6
+                    spacing: 8
 
-                    QQC2.TextField {
-                        id: amountField
-                        anchors.fill: parent
-                        anchors.margins: 6
-                        placeholderText: "Amount"
-                        validator: DoubleValidator { bottom: 0.01; decimals: 4 }
-                        onTextChanged: root.transferAmount = text
-                        color: "#ffffff"
-                        font.bold: true
-                        font.pixelSize: 13
-                        background: Item {}
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 36
+                        color: "#252525"
+                        radius: 6
+
+                        QQC2.TextField {
+                            id: amountField
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            placeholderText: "Amount"
+                            validator: DoubleValidator { bottom: 0.01; decimals: 4 }
+                            onTextChanged: root.transferAmount = text
+                            color: "#ffffff"
+                            font.bold: true
+                            font.pixelSize: 13
+                            background: Item {}
+                        }
                     }
-                }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 36
-                    color: "#252525"
-                    radius: 6
-
-                    QQC2.ComboBox {
-                        id: currencyCombo
-                        anchors.fill: parent
-                        anchors.margins: 6
-                        model: ["RUB", "USD", "EUR", "UAH", "GBP", "BYN", "KZT", "BTC"]
-                        currentIndex: 0
-                        onCurrentTextChanged: root.transferCurrency = currentText
-                        background: Item {}
+                    PlasmaComponents.Label {
+                        text: currencySymbols[displayCurrency] || displayCurrency
+                        color: "#2BAD72"
+                        font.bold: true
+                        font.pixelSize: 16
+                        Layout.alignment: Qt.AlignVCenter
                     }
                 }
 
