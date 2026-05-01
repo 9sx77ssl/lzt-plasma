@@ -9,6 +9,7 @@ Plasmoid that shows your [Lolzteam Market](https://lzt.market) balance in the pa
 - Live balance in panel with auto-refresh
 - Currency conversion (RUB, USD, EUR, UAH, GBP, BYN, KZT, BTC)
 - Fallback API server if primary fails
+- Right-click → Transfer Money (send funds to other users)
 - Right-click → Refresh Balance
 - Silent background updates, no UI flicker
 - Native Plasma config dialog (right-click → Configure)
