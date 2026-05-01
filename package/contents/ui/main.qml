@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
@@ -16,8 +17,19 @@ PlasmoidItem {
     property bool hasFetchedOnce: false
     property bool pendingBalance: false
     property bool pendingCurrency: false
+    property bool pendingTransfer: false
+    property string transferStatus: ""
+    property bool transferSuccess: false
 
     property var currencyRates: ({})
+
+    // Transfer form properties
+    property string transferAmount: ""
+    property string transferCurrency: "RUB"
+    property bool transferUseId: true
+    property string transferUserId: ""
+    property string transferUsername: ""
+    property string transferComment: ""
 
     readonly property string apiKey: Plasmoid.configuration.apiKey || ""
     readonly property int balanceRefreshMs: (Plasmoid.configuration.updateInterval || 30) * 1000
@@ -32,6 +44,11 @@ PlasmoidItem {
     })
 
     Plasmoid.contextualActions: [
+        PlasmaCore.Action {
+            text: i18n("Transfer Money")
+            icon.name: "send-money"
+            onTriggered: transferWindow.show()
+        },
         PlasmaCore.Action {
             text: i18n("Refresh Balance")
             icon.name: "view-refresh"
@@ -71,9 +88,99 @@ PlasmoidItem {
         }
     }
 
-    fullRepresentation: Item {
-        Layout.preferredWidth: 0
-        Layout.preferredHeight: 0
+    fullRepresentation: Item {}
+
+    Window {
+        id: transferWindow
+        title: "Transfer Money"
+        width: 320
+        height: 400
+        visible: false
+        flags: Qt.Dialog | Qt.WindowCloseButtonHint
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+            Kirigami.Heading {
+                text: "Send Money"
+                level: 2
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            QQC2.TextField {
+                id: amountField
+                Layout.fillWidth: true
+                placeholderText: "Amount"
+                validator: DoubleValidator { bottom: 0.01; decimals: 4 }
+                onTextChanged: root.transferAmount = text
+            }
+
+            QQC2.ComboBox {
+                id: currencyCombo
+                Layout.fillWidth: true
+                model: ["RUB", "USD", "EUR", "UAH", "GBP", "BYN", "KZT", "BTC"]
+                currentIndex: 0
+                onCurrentTextChanged: root.transferCurrency = currentText
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                QQC2.Button {
+                    text: "By ID"
+                    checked: root.transferUseId
+                    onClicked: root.transferUseId = true
+                }
+                QQC2.Button {
+                    text: "By Username"
+                    checked: !root.transferUseId
+                    onClicked: root.transferUseId = false
+                }
+            }
+
+            QQC2.TextField {
+                id: userField
+                Layout.fillWidth: true
+                placeholderText: root.transferUseId ? "User ID" : "Username"
+                onTextChanged: {
+                    if (root.transferUseId) root.transferUserId = text
+                    else root.transferUsername = text
+                }
+            }
+
+            QQC2.TextField {
+                id: commentField
+                Layout.fillWidth: true
+                placeholderText: "Comment (optional)"
+                onTextChanged: root.transferComment = text
+            }
+
+            PlasmaComponents.Label {
+                text: root.transferStatus
+                color: root.transferSuccess ? "#2BAD72" : "#884444"
+                visible: root.transferStatus.length > 0
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 10
+
+                QQC2.Button {
+                    text: "Send"
+                    enabled: !root.pendingTransfer && amountField.text.length > 0 && userField.text.length > 0
+                    onClicked: root.sendTransfer()
+                }
+
+                QQC2.Button {
+                    text: "Close"
+                    onClicked: transferWindow.close()
+                }
+            }
+
+            Item { Layout.fillHeight: true }
+        }
     }
 
     Timer {
@@ -297,5 +404,104 @@ PlasmoidItem {
             currencyRates = rates
             recalcDisplay()
         } catch (e) {}
+    }
+
+    function sendTransfer() {
+        if (pendingTransfer) return
+        if (apiKey.length === 0) {
+            transferStatus = "No API Key"
+            transferSuccess = false
+            return
+        }
+
+        var amount = parseFloat(transferAmount)
+        if (isNaN(amount) || amount <= 0) {
+            transferStatus = "Invalid amount"
+            transferSuccess = false
+            return
+        }
+
+        var target = transferUseId ? transferUserId : transferUsername
+        if (target.length === 0) {
+            transferStatus = "Enter recipient"
+            transferSuccess = false
+            return
+        }
+
+        pendingTransfer = true
+        transferStatus = "Sending..."
+        transferSuccess = false
+
+        var body = {
+            currency: transferCurrency.toLowerCase(),
+            amount: amount,
+            telegram_deal: false,
+            transfer_hold: false,
+            comment: transferComment.length > 0 ? transferComment : ""
+        }
+
+        if (transferUseId) {
+            body.user_id = parseInt(target) || 0
+        } else {
+            body.username = target
+        }
+
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 15000
+
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+
+            if (xhr.status === 200) {
+                try {
+                    var resp = JSON.parse(xhr.responseText)
+                    if (resp.status === "ok") {
+                        transferStatus = resp.message || "Success"
+                        transferSuccess = true
+                        transferAmount = ""
+                        transferUserId = ""
+                        transferUsername = ""
+                        transferComment = ""
+                    } else {
+                        transferStatus = resp.message || "Failed"
+                        transferSuccess = false
+                    }
+                } catch (e) {
+                    transferStatus = "Parse error"
+                    transferSuccess = false
+                }
+            } else if (xhr.status === 401) {
+                transferStatus = "Bad Token"
+                transferSuccess = false
+            } else if (xhr.status === 429) {
+                transferStatus = "Rate Limited"
+                transferSuccess = false
+            } else if (xhr.status === 0) {
+                transferStatus = "Offline"
+                transferSuccess = false
+            } else {
+                try {
+                    var err = JSON.parse(xhr.responseText)
+                    transferStatus = err.message || ("Err " + xhr.status)
+                } catch (e) {
+                    transferStatus = "Err " + xhr.status
+                }
+                transferSuccess = false
+            }
+            pendingTransfer = false
+            silentFetchBalance()
+        }
+
+        xhr.ontimeout = function() {
+            transferStatus = "Timeout"
+            transferSuccess = false
+            pendingTransfer = false
+        }
+
+        xhr.open("POST", primaryServer + "/balance/transfer")
+        xhr.setRequestHeader("Content-Type", "application/json")
+        xhr.setRequestHeader("Accept", "application/json")
+        xhr.setRequestHeader("Authorization", "Bearer " + apiKey)
+        xhr.send(JSON.stringify(body))
     }
 }
