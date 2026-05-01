@@ -46,7 +46,7 @@ PlasmoidItem {
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
             text: i18n("Transfer Money")
-            icon.name: "send-money"
+            icon.name: "document-send"
             onTriggered: transferWindow.show()
         },
         PlasmaCore.Action {
@@ -94,92 +94,122 @@ PlasmoidItem {
         id: transferWindow
         title: "Transfer Money"
         width: 320
-        height: 400
+        height: 420
         visible: false
         flags: Qt.Dialog | Qt.WindowCloseButtonHint
+        color: "#303030"
 
-        ColumnLayout {
+        Rectangle {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
+            color: "#303030"
 
-            Kirigami.Heading {
-                text: "Send Money"
-                level: 2
-                Layout.alignment: Qt.AlignHCenter
-            }
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 12
 
-            QQC2.TextField {
-                id: amountField
-                Layout.fillWidth: true
-                placeholderText: "Amount"
-                validator: DoubleValidator { bottom: 0.01; decimals: 4 }
-                onTextChanged: root.transferAmount = text
-            }
-
-            QQC2.ComboBox {
-                id: currencyCombo
-                Layout.fillWidth: true
-                model: ["RUB", "USD", "EUR", "UAH", "GBP", "BYN", "KZT", "BTC"]
-                currentIndex: 0
-                onCurrentTextChanged: root.transferCurrency = currentText
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                QQC2.Button {
-                    text: "By ID"
-                    checked: root.transferUseId
-                    onClicked: root.transferUseId = true
-                }
-                QQC2.Button {
-                    text: "By Username"
-                    checked: !root.transferUseId
-                    onClicked: root.transferUseId = false
-                }
-            }
-
-            QQC2.TextField {
-                id: userField
-                Layout.fillWidth: true
-                placeholderText: root.transferUseId ? "User ID" : "Username"
-                onTextChanged: {
-                    if (root.transferUseId) root.transferUserId = text
-                    else root.transferUsername = text
-                }
-            }
-
-            QQC2.TextField {
-                id: commentField
-                Layout.fillWidth: true
-                placeholderText: "Comment (optional)"
-                onTextChanged: root.transferComment = text
-            }
-
-            PlasmaComponents.Label {
-                text: root.transferStatus
-                color: root.transferSuccess ? "#2BAD72" : "#884444"
-                visible: root.transferStatus.length > 0
-                Layout.alignment: Qt.AlignHCenter
-            }
-
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 10
-
-                QQC2.Button {
-                    text: "Send"
-                    enabled: !root.pendingTransfer && amountField.text.length > 0 && userField.text.length > 0
-                    onClicked: root.sendTransfer()
+                Kirigami.Heading {
+                    text: "Send Money"
+                    level: 2
+                    color: "#2BAD72"
+                    Layout.alignment: Qt.AlignHCenter
                 }
 
-                QQC2.Button {
-                    text: "Close"
-                    onClicked: transferWindow.close()
+                QQC2.TextField {
+                    id: amountField
+                    Layout.fillWidth: true
+                    placeholderText: "Amount"
+                    validator: DoubleValidator { bottom: 0.01; decimals: 4 }
+                    onTextChanged: root.transferAmount = text
+                    color: "#ffffff"
+                    background: Rectangle { color: "#272727"; radius: 4 }
                 }
-            }
 
-            Item { Layout.fillHeight: true }
+                QQC2.ComboBox {
+                    id: currencyCombo
+                    Layout.fillWidth: true
+                    model: ["RUB", "USD", "EUR", "UAH", "GBP", "BYN", "KZT", "BTC"]
+                    currentIndex: 0
+                    onCurrentTextChanged: root.transferCurrency = currentText
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    QQC2.Button {
+                        text: "By ID"
+                        checked: root.transferUseId
+                        onClicked: root.transferUseId = true
+                        background: Rectangle { color: checked ? "#2BAD72" : "#272727"; radius: 4 }
+                    }
+                    QQC2.Button {
+                        text: "By Username"
+                        checked: !root.transferUseId
+                        onClicked: root.transferUseId = false
+                        background: Rectangle { color: checked ? "#2BAD72" : "#272727"; radius: 4 }
+                    }
+                }
+
+                QQC2.TextField {
+                    id: userField
+                    Layout.fillWidth: true
+                    placeholderText: root.transferUseId ? "User ID" : "Username"
+                    onTextChanged: {
+                        if (root.transferUseId) root.transferUserId = text
+                        else root.transferUsername = text
+                    }
+                    color: "#ffffff"
+                    background: Rectangle { color: "#272727"; radius: 4 }
+                }
+
+                QQC2.TextField {
+                    id: commentField
+                    Layout.fillWidth: true
+                    placeholderText: "Comment (optional)"
+                    onTextChanged: root.transferComment = text
+                    color: "#ffffff"
+                    background: Rectangle { color: "#272727"; radius: 4 }
+                }
+
+                PlasmaComponents.Label {
+                    text: root.transferStatus
+                    color: root.transferSuccess ? "#2BAD72" : "#884444"
+                    visible: root.transferStatus.length > 0
+                    Layout.alignment: Qt.AlignHCenter
+                    font.pixelSize: 11
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 10
+
+                    QQC2.Button {
+                        text: "Send"
+                        enabled: !root.pendingTransfer && amountField.text.length > 0 && userField.text.length > 0
+                        onClicked: root.sendTransfer()
+                        background: Rectangle { color: "#2BAD72"; radius: 4 }
+                        contentItem: Text {
+                            text: parent.text
+                            color: "#ffffff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+
+                    QQC2.Button {
+                        text: "Close"
+                        onClicked: transferWindow.close()
+                        background: Rectangle { color: "#272727"; radius: 4 }
+                        contentItem: Text {
+                            text: parent.text
+                            color: "#ffffff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+            }
         }
     }
 
@@ -462,6 +492,9 @@ PlasmoidItem {
                         transferUserId = ""
                         transferUsername = ""
                         transferComment = ""
+                    } else if (resp.errors && resp.errors.length > 0) {
+                        transferStatus = resp.errors[0] || "Failed"
+                        transferSuccess = false
                     } else {
                         transferStatus = resp.message || "Failed"
                         transferSuccess = false
@@ -482,7 +515,11 @@ PlasmoidItem {
             } else {
                 try {
                     var err = JSON.parse(xhr.responseText)
-                    transferStatus = err.message || ("Err " + xhr.status)
+                    if (err.errors && err.errors.length > 0) {
+                        transferStatus = err.errors[0] || ("Err " + xhr.status)
+                    } else {
+                        transferStatus = err.message || ("Err " + xhr.status)
+                    }
                 } catch (e) {
                     transferStatus = "Err " + xhr.status
                 }
