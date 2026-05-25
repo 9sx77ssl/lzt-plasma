@@ -10,9 +10,9 @@ PlasmoidItem {
 
     property string rawBalance:    "0.00"
     property string rawHold:       "0.00"
-    property string displayText:   "0.00"
+    property string displayText:   "0"
     property string displaySymbol: "₽"
-    property string displayHold:   "0.00"
+    property string displayHold:   "0"
     property bool   holdPositive:  false
 
     property string statusText:       ""
@@ -57,13 +57,7 @@ PlasmoidItem {
         }
     ]
 
-    toolTipMainText: "LZT Market Balance"
-    toolTipSubText: {
-        if (hasError) return statusText
-        var t = displayText + " " + displaySymbol
-        if (holdPositive) t += "  ·  hold " + displayHold + " ₽"
-        return t
-    }
+    // No tooltip — removed per request
 
     preferredRepresentation: compactRepresentation
 
@@ -77,7 +71,7 @@ PlasmoidItem {
     }
 
     // ────────────────────────────────────────────────────────────────
-    // Panel widget — official Plasma 6 pattern
+    // Panel widget
     // ────────────────────────────────────────────────────────────────
     compactRepresentation: MouseArea {
         id: compactRoot
@@ -152,10 +146,18 @@ PlasmoidItem {
 
             Text {
                 visible: root.holdPositive && root.hasFetchedOnce && !root.hasError
-                text: "· " + root.displayHold + "₽"
+                text: "/"
+                color: "#404040"
+                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Text {
+                visible: root.holdPositive && root.hasFetchedOnce && !root.hasError
+                text: root.displayHold + root.displaySymbol
                 color: "#707070"
-                font.pixelSize: Kirigami.Theme.smallFont.pixelSize
                 font.bold: true
+                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize
                 Layout.alignment: Qt.AlignVCenter
             }
         }
@@ -177,9 +179,9 @@ PlasmoidItem {
         }
 
         mainItem: Rectangle {
-            width: 320
+            width: 340
             implicitHeight: dlgCol.implicitHeight + 32
-            color: "#1a1a1a"
+            color: "#0d0d0d"
 
             ColumnLayout {
                 id: dlgCol
@@ -187,30 +189,35 @@ PlasmoidItem {
                     top:    parent.top
                     left:   parent.left
                     right:  parent.right
-                    margins: 14
+                    margins: 16
                 }
-                spacing: 10
+                spacing: 9
 
-                // ── Header card ─────────────────────────────────
+                // ── Header card with subtle glow ────────────────
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 58
-                    color: "#272727"
-                    radius: 12
-                    border.color: "#363636"
+                    height: 60
+                    radius: 8
+                    border.color: "#262626"
                     border.width: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#161616" }
+                        GradientStop { position: 0.5; color: "#171818" }
+                        GradientStop { position: 1.0; color: "#1b2620" }
+                    }
 
-                    // Green accent
+                    // Green accent bar
                     Rectangle {
                         x: 0; y: 12
-                        width: 3; height: 34
+                        width: 3; height: 36
                         radius: 2
                         color: "#2BAD72"
                     }
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 16
+                        anchors.leftMargin: 18
                         anchors.rightMargin: 16
                         spacing: 0
 
@@ -227,8 +234,9 @@ PlasmoidItem {
                             color: "#2BAD72"
                             font.bold: true
                             font.pixelSize: 16
+                            font.letterSpacing: 0.3
                             Layout.fillWidth: true
-                            leftPadding: 10
+                            leftPadding: 11
                             Layout.alignment: Qt.AlignVCenter
                         }
 
@@ -246,7 +254,7 @@ PlasmoidItem {
                             }
                             Text {
                                 visible: root.holdPositive
-                                text: "hold " + root.displayHold + "₽"
+                                text: "hold " + root.displayHold + root.displaySymbol
                                 color: "#707070"
                                 font.pixelSize: 10
                                 anchors.right: parent.right
@@ -260,10 +268,10 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 48
-                    color: "#272727"
-                    radius: 10
+                    color: "#161616"
+                    radius: 8
                     border.width: 1
-                    border.color: amountField.activeFocus ? "#2BAD72" : "#363636"
+                    border.color: amountField.activeFocus ? "#2BAD72" : "#262626"
 
                     RowLayout {
                         anchors.fill: parent
@@ -275,7 +283,7 @@ PlasmoidItem {
                             id: amountField
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
-                            placeholderText: "0.00"
+                            placeholderText: "0"
                             leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
                             validator: DoubleValidator {
                                 bottom: 0.01
@@ -288,7 +296,7 @@ PlasmoidItem {
                             font.bold: true
                             font.pixelSize: 17
                             background: Item {}
-                            placeholderTextColor: "#505050"
+                            placeholderTextColor: "#3a3a3a"
                         }
 
                         Text {
@@ -316,18 +324,19 @@ PlasmoidItem {
                             required property var modelData
                             Layout.fillWidth: true
                             height: 36
-                            radius: 9
-                            color:        root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#272727"
-                            border.color: root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#363636"
+                            radius: 8
+                            color:        root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#161616"
+                            border.color: root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#262626"
                             border.width: 1
 
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.label
                                 color: "#FFFFFF"
-                                opacity: root.transferTargetCurrency === modelData.code ? 1.0 : 0.6
+                                opacity: root.transferTargetCurrency === modelData.code ? 1.0 : 0.5
                                 font.bold: true
                                 font.pixelSize: 12
+                                font.letterSpacing: 0.3
                             }
 
                             MouseArea {
@@ -347,18 +356,19 @@ PlasmoidItem {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        radius: 9
-                        color:        root.transferUseId ? "#2BAD72" : "#272727"
-                        border.color: root.transferUseId ? "#2BAD72" : "#363636"
+                        radius: 8
+                        color:        root.transferUseId ? "#2BAD72" : "#161616"
+                        border.color: root.transferUseId ? "#2BAD72" : "#262626"
                         border.width: 1
 
                         Text {
                             anchors.centerIn: parent
                             text: "By ID"
                             color: "#FFFFFF"
-                            opacity: root.transferUseId ? 1.0 : 0.6
+                            opacity: root.transferUseId ? 1.0 : 0.5
                             font.bold: true
                             font.pixelSize: 12
+                            font.letterSpacing: 0.3
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -370,18 +380,19 @@ PlasmoidItem {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        radius: 9
-                        color:        !root.transferUseId ? "#2BAD72" : "#272727"
-                        border.color: !root.transferUseId ? "#2BAD72" : "#363636"
+                        radius: 8
+                        color:        !root.transferUseId ? "#2BAD72" : "#161616"
+                        border.color: !root.transferUseId ? "#2BAD72" : "#262626"
                         border.width: 1
 
                         Text {
                             anchors.centerIn: parent
                             text: "By Username"
                             color: "#FFFFFF"
-                            opacity: !root.transferUseId ? 1.0 : 0.6
+                            opacity: !root.transferUseId ? 1.0 : 0.5
                             font.bold: true
                             font.pixelSize: 12
+                            font.letterSpacing: 0.3
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -395,10 +406,10 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 48
-                    color: "#272727"
-                    radius: 10
+                    color: "#161616"
+                    radius: 8
                     border.width: 1
-                    border.color: userField.activeFocus ? "#2BAD72" : "#363636"
+                    border.color: userField.activeFocus ? "#2BAD72" : "#262626"
 
                     QQC2.TextField {
                         id: userField
@@ -417,7 +428,7 @@ PlasmoidItem {
                         font.bold: true
                         font.pixelSize: 13
                         background: Item {}
-                        placeholderTextColor: "#505050"
+                        placeholderTextColor: "#3a3a3a"
                     }
                 }
 
@@ -425,10 +436,10 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 48
-                    color: "#272727"
-                    radius: 10
+                    color: "#161616"
+                    radius: 8
                     border.width: 1
-                    border.color: commentField.activeFocus ? "#2BAD72" : "#363636"
+                    border.color: commentField.activeFocus ? "#2BAD72" : "#262626"
 
                     QQC2.TextField {
                         id: commentField
@@ -444,7 +455,7 @@ PlasmoidItem {
                         color: "#FFFFFF"
                         font.pixelSize: 13
                         background: Item {}
-                        placeholderTextColor: "#505050"
+                        placeholderTextColor: "#3a3a3a"
                     }
                 }
 
@@ -453,7 +464,7 @@ PlasmoidItem {
                     Layout.fillWidth: true
                     height: 36
                     visible: root.transferStatus.length > 0
-                    radius: 9
+                    radius: 8
                     color:        root.transferSuccess ? "#0d2618" : "#2a1010"
                     border.color: root.transferSuccess ? "#2BAD72" : "#884444"
                     border.width: 1
@@ -476,15 +487,15 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 44
-                    radius: 10
+                    radius: 8
                     color: {
                         if (root.pendingTransfer) return "#1a3d2b"
-                        if (amountField.text.length === 0 || userField.text.length === 0) return "#272727"
+                        if (amountField.text.length === 0 || userField.text.length === 0) return "#161616"
                         return "#2BAD72"
                     }
                     border.color: {
                         if (root.pendingTransfer) return "#2BAD72"
-                        if (amountField.text.length === 0 || userField.text.length === 0) return "#363636"
+                        if (amountField.text.length === 0 || userField.text.length === 0) return "#262626"
                         return "#2BAD72"
                     }
                     border.width: 1
@@ -494,11 +505,12 @@ PlasmoidItem {
                         text: root.pendingTransfer ? "Sending..." : "Send"
                         color: {
                             if (root.pendingTransfer) return "#2BAD72"
-                            if (amountField.text.length === 0 || userField.text.length === 0) return "#505050"
+                            if (amountField.text.length === 0 || userField.text.length === 0) return "#404040"
                             return "#FFFFFF"
                         }
                         font.bold: true
                         font.pixelSize: 14
+                        font.letterSpacing: 0.3
                     }
 
                     MouseArea {
@@ -640,35 +652,47 @@ PlasmoidItem {
     }
 
     function recalcDisplay() {
-        var bal = parseFloat(rawBalance)
-        if (isNaN(bal)) bal = 0
+        var bal  = parseFloat(rawBalance)
+        var hold = parseFloat(rawHold)
+        if (isNaN(bal))  bal  = 0
+        if (isNaN(hold) || hold < 0) hold = 0
 
+        var symbol = "₽"
         if (displayCurrency === "RUB") {
-            displayText   = formatNumber(bal)
-            displaySymbol = "₽"
+            displayText = formatNumber(bal)
+            displayHold = formatNumber(hold)
         } else {
             var rate = currencyRates[displayCurrency]
             if (!rate || rate <= 0) {
-                displayText   = formatNumber(bal)
-                displaySymbol = "₽"
+                displayText = formatNumber(bal)
+                displayHold = formatNumber(hold)
             } else {
-                displayText   = formatNumber(bal / rate)
-                displaySymbol = currencySymbols[displayCurrency] || displayCurrency
+                displayText = formatNumber(bal  / rate)
+                displayHold = formatNumber(hold / rate)
+                symbol = currencySymbols[displayCurrency] || displayCurrency
             }
         }
-
-        var hold = parseFloat(rawHold)
-        if (isNaN(hold) || hold < 0) hold = 0
+        displaySymbol = symbol
         holdPositive = hold > 0.001
-        displayHold  = formatNumber(hold)
     }
 
+    // Smart number format:
+    //   0      → "0"
+    //   10.00  → "10"        (integer)
+    //   10.05  → "10.1"      (one decimal)
+    //   123.45 → "123.5"     (one decimal, rounded)
+    //   0.005  → "0.005"     (small values keep precision)
     function formatNumber(v) {
-        if (isNaN(v))  return "0.00"
-        if (v >= 1000) return v.toFixed(0)
-        if (v >= 100)  return v.toFixed(1)
-        if (v >= 1)    return v.toFixed(2)
-        return v.toFixed(4)
+        if (isNaN(v) || v <= 0) return "0"
+
+        if (v < 1) {
+            var s = v.toFixed(4)
+            return s.replace(/\.?0+$/, "") || "0"
+        }
+
+        var r = Math.round(v * 10) / 10
+        if (Math.abs(r - Math.round(r)) < 0.001) return Math.round(r).toString()
+        return r.toFixed(1)
     }
 
     function sendTransfer() {

@@ -1,30 +1,41 @@
-# LZT Market Balance — KDE Plasma 6 Widget
+<div align="center">
 
-Plasmoid that shows your [Lolzteam Market](https://lzt.market) balance in the panel, with quick money transfers.
+<img src="package/contents/ui/images/lolzteam.svg" width="80" height="80" alt="LZT" />
 
-![Plasma 6](https://img.shields.io/badge/Plasma-6.0+-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+# LZT Market Balance
+
+**KDE Plasma 6 widget** — live Lolzteam Market balance in your panel, with one-click money transfers.
+
+![Plasma 6](https://img.shields.io/badge/Plasma-6.0+-2BAD72?style=flat-square)
+![Qt](https://img.shields.io/badge/Qt-6-2BAD72?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-2BAD72?style=flat-square)
+
+</div>
+
+---
 
 ## Features
 
-- **Live balance** in the panel, auto-refreshes every N seconds
-- **Hold display** next to the balance (e.g. `1455₽ · 10₽` when funds are on hold)
-- **Currency conversion** by Lolzteam forum rates (RUB, USD, EUR, UAH, GBP, BYN, KZT, BTC)
-- **Batch API** — balance + currency rates fetched in a single `POST /batch` request
-- **Money transfer** via right-click → Transfer Money, or left-click on the widget
-  - Independent transfer currency (RUB / USD), not tied to display currency
-  - By User ID or by Username
-  - Optional comment (max 255 chars)
-  - Amount limit: 10 000 000
-  - **Auto-fallback** on backup API server for 5xx / timeout / network errors
-- **Fallback API server** if primary fails (also for balance refresh)
-- **Native Plasma 6 dialog** with brand-themed UI (LZT green `#2BAD72`)
-- **Form auto-reset** when the dialog is closed
-- **Silent background updates**, no UI flicker
-- **Native Plasma config** dialog (right-click → Configure)
+- **Live balance + hold** in the panel — `1451₽ / 10₽` format, hold same size as balance with grey divider
+- **Smart number formatting** — `10` for integers, `10.5` for fractions, extra precision for crypto (`<1`)
+- **Currency conversion** by Lolzteam's own forum rates (RUB / USD / EUR / UAH / GBP / BYN / KZT / BTC)
+- **Both balance and hold** convert to the selected display currency
+- **Batch API** — `/me` and `/currency` fetched in a single `POST /batch` request per refresh
+- **Native Plasma 6 transfer dialog**
+  - Left-click on the widget, or right-click → Transfer Money
+  - Independent transfer currency selector (RUB / USD)
+  - Send by **User ID** or **Username**
+  - Optional comment, max 255 chars
+  - Amount validated 0.01 – 10 000 000
+  - Form auto-resets when closed
+- **Auto-fallback API server** on `/balance/transfer` for 5xx / timeout / network errors
+- **Auto-fallback API server** on `/batch` for the same errors
+- **Brand-themed UI** in the Lolzteam palette (`#2BAD72`, `#0d0d0d`, `#161616`, `#262626`)
+- **Native Plasma sizing** — uses the same `formFactor` state pattern as `digital-clock` upstream
 
 ## Install
 
-One-line install (always latest):
+One-line install (always pulls latest from `main`):
 
 ```bash
 sh -c "$(curl -sS https://raw.githubusercontent.com/9sx77ssl/lzt-plasma/main/install.sh)"
@@ -39,42 +50,109 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Restart Plasma (if widget doesn't appear):
+The installer detects your distro (Arch, Debian, Ubuntu, Fedora, RHEL, openSUSE, Gentoo) and installs the required Plasma packages.
+
+Restart Plasma if the widget doesn't immediately appear:
 
 ```bash
 kquitapp6 plasmashell && kstart plasmashell
 ```
 
-Then: right-click panel → Add Widgets → search **"LZT Market Balance"**.
+Then: right-click the panel → **Add Widgets** → search **"LZT Market Balance"**.
 
 ## Settings
 
-Right-click the widget → Configure:
+Right-click the widget → **Configure**:
 
-| Setting | Description |
-|---------|-------------|
-| **API Key** | Your LZT Bearer token. Get at [lolz.live/account/api](https://lolz.live/account/api) — needs `market` scope |
-| **API Server** | `prod-api.lzt.market` (default) or `api.lzt.market` (alternative). Auto-fallback on errors |
-| **Refresh interval** | Seconds between balance/currency updates (default 30, min 10) |
-| **Display currency** | Currency shown in panel. Balance is converted by forum rates |
+| Setting | Default | Description |
+|---|---|---|
+| API Key | _empty_ | Your LZT Bearer token from [lolz.live/account/api](https://lolz.live/account/api) (requires `market` scope) |
+| API Server | `prod-api.lzt.market` | Primary endpoint. Falls back to `api.lzt.market` automatically on errors |
+| Refresh interval | `30` sec | Single interval for both balance and currency rates (min 10, max 3600) |
+| Display currency | `RUB` | Currency shown in the panel. Conversion uses live forum rates |
 
 ## Usage
 
-- **Left-click** widget → opens Transfer dialog
-- **Right-click** widget → context menu (Transfer / Refresh / Configure / Remove)
-- **Click outside** dialog → closes & resets form
+- **Left-click** the widget → opens the Transfer dialog
+- **Right-click** the widget → context menu (Transfer / Refresh / Configure / Remove)
+- **Click outside** the dialog → closes and resets the form
 
-## How transfers work
+## Architecture
 
-1. Enter amount (validated 0.01 – 10 000 000)
-2. Pick currency (RUB or USD)
-3. Choose recipient by **User ID** or by **Username**
-4. Optional comment
-5. Hit **Send** — request goes to your configured API server
-6. On 5xx server errors, timeout, or network failure → auto-retries once on the backup API server
-7. On success: balance refreshes and form clears
+```
+┌──────────── Panel Widget ────────────┐
+│  [SVG]  1451₽  /  10₽                │   ← compactRepresentation (MouseArea)
+└──────────────────────────────────────┘
+              │ left-click
+              ▼
+┌──────── PlasmaCore.Dialog ───────────┐
+│  ┌────────────────────────────────┐  │
+│  │ [icon] Transfer       1451₽    │  │   ← header (gradient + accent bar)
+│  │                       hold 10  │  │
+│  └────────────────────────────────┘  │
+│   [ Amount                       ₽ ]  │
+│   [ ₽ RUB    ] [ $ USD    ]           │
+│   [ By ID    ] [ By Username ]        │
+│   [ User ID                        ]  │
+│   [ Comment (optional)             ]  │
+│   [           Send                 ]  │
+└──────────────────────────────────────┘
+```
 
-4xx errors (401 Bad Token, 429 Rate Limit, validation errors) are NOT retried — these would fail the same way on the backup server, and retrying could mask real auth issues.
+## Security
+
+| Layer | Implementation |
+|---|---|
+| Transport | HTTPS only (no plain HTTP endpoints) |
+| API token | Stored in Plasma's standard config (`~/.config/plasma-org.kde.plasma.desktop-appletsrc`, mode 600 by the user) |
+| Token in UI | Settings field uses `echoMode: TextInput.Password` |
+| Input validation | Amount: `DoubleValidator 0.01 – 10 000 000`. User ID: `parseInt(_, 10)` + NaN/<=0 check. Username: trim. Comment: `maximumLength: 255` |
+| Request body | All values go through `JSON.stringify` (auto-escapes) — no string concatenation, no injection vectors |
+| Transfer retry | Only retries on **infrastructure errors** (5xx, timeout, network). Never retries 4xx errors that might mean the first request was processed — prevents duplicate transfers |
+| Error messages | Server error messages displayed verbatim, but limited to the `errors[0]` field; no raw HTML or response bodies rendered |
+| Third-party calls | Zero. Talks only to `*.lzt.market` |
+
+## Future feature ideas
+
+Based on [LZT Market API](https://lzt-market.readme.io/reference) and [LZT Forum API](https://lolzteam.readme.io/reference), the following extensions are technically possible without changing the architecture:
+
+### Market API additions
+
+1. **Sub-balance breakdown** — `/me` already returns `balances[]` (merchant, account, custom wallets). Could be shown in an expandable section below the main balance
+2. **Active listings counter** — `/me.active_items_count` → badge on the widget icon
+3. **Sold items counter** — `/me.sold_items_count`
+4. **Recent payments** — `GET /payments?type=in/out` to show the last few incoming/outgoing transactions in the dialog
+5. **Payout history** — `GET /payouts` for withdrawal status tracking
+6. **My listings** — quick list of currently published items with prices
+7. **Item search** — small search box that opens results in browser
+
+### Forum API additions
+
+1. **Unread DM badge** — `GET /conversations` → small red dot on the icon when `unread_count > 0`
+2. **Reputation counter** — `like_count`, `like2_count` in an expanded view
+3. **Notifications feed** — last 5 site notifications, click to open in browser
+4. **Forum thread bookmarks** — quick links to subscribed threads
+
+### UX improvements
+
+1. **Balance trend** — small arrow `▲ +12₽` / `▼ -8₽` showing delta since last refresh
+2. **Threshold alert** — desktop notification when balance drops below a configured amount
+3. **Copy-to-clipboard** on click of the panel balance
+4. **Quick links** — submenu with "Open profile", "Open market", "Top up" links
+5. **Sub-balances popup** — expandable section showing each individual wallet
+
+## Brand palette
+
+```
+#2BAD72  Green     active buttons, balance, accent
+#884444  Red       errors
+#FFFFFF  White     primary text
+#0D0D0D  Dialog    dialog background (deepest)
+#161616  Card      card / field background
+#262626  Border    subtle borders
+#404040  Divider   panel separators
+#707070  Subtle    hold text, dim labels
+```
 
 ## Uninstall
 
@@ -82,31 +160,18 @@ Right-click the widget → Configure:
 kpackagetool6 -t Plasma/Applet -r org.kde.plasma.lztbalance
 ```
 
-## Brand palette
+## Tech stack
 
-The dialog uses the official LZT forum color scheme:
+- **QML** (Qt 6.5+) — UI
+- **KF6** — `kirigami`, `plasma-framework`
+- **JavaScript** — API client logic
+- **XMLHttpRequest** — HTTP transport
+- **No external runtime dependencies** beyond stock Plasma 6
 
-| Color | Hex | Usage |
-|-------|-----|-------|
-| Green | `#2BAD72` | Active buttons, accents, balance text |
-| Red | `#884444` | Errors |
-| White | `#FFFFFF` | Primary text |
-| Dialog BG | `#1A1A1A` | Dialog background |
-| Card/Field | `#272727` | Header card, input fields, inactive buttons |
-| Border | `#363636` | Default borders |
-| Asphalt | `#505050` | Placeholders |
+## Contributing
 
-## Tech
-
-- QML / Qt 6 / KF6
-- `XMLHttpRequest` for API calls
-- `PlasmaCore.Dialog` for the native popup
-- Standard Plasma 6 sizing pattern (`Layout.fillHeight`/`fillWidth` based on `formFactor`)
-
-## Author
-
-[gay1234](https://lolz.live/gay1234)
+PRs welcome. The whole widget is one `main.qml` (~600 lines), one `main.xml` config schema, one `General.qml` config UI, and an `install.sh` for distro detection — easy to grok.
 
 ## License
 
-MIT
+[MIT](LICENSE) © [gay1234](https://lolz.live/gay1234)
