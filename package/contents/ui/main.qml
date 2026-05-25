@@ -77,13 +77,16 @@ PlasmoidItem {
     toolTipSubText: " "
 
     // ── Desktop notification for balance changes ────────────────
-    KNotification {
+    // QML name is `Notification` (not `KNotification`) — the module exports
+    // org.kde.notification/Notification 1.0 with prototype KNotification.
+    // Verified via /usr/lib/qt6/qml/org/kde/notification/*.qmltypes.
+    Notification {
         id: balanceNotif
         componentName: "plasma_workspace"
         eventId: "notification"
         iconName: "lztbalance"
         title: "Lolzteam"
-        flags: KNotification.CloseOnTimeout
+        flags: Notification.CloseOnTimeout
     }
 
     preferredRepresentation: compactRepresentation
