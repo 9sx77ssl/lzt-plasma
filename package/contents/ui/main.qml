@@ -303,6 +303,10 @@ PlasmoidItem {
                 }
 
                 // ── Amount ──────────────────────────────────────
+                // TextField fills the whole Rectangle so the entire 48px
+                // tall area is clickable — not just the centered text.
+                // Currency symbol overlays on the right inside the
+                // TextField's right padding.
                 Rectangle {
                     Layout.fillWidth: true
                     height: 48
@@ -311,39 +315,37 @@ PlasmoidItem {
                     border.width: 1
                     border.color: amountField.activeFocus ? "#2BAD72" : "#262626"
 
-                    RowLayout {
+                    QQC2.TextField {
+                        id: amountField
                         anchors.fill: parent
-                        anchors.leftMargin: 16
+                        leftPadding: 16
+                        rightPadding: 40        // room for the currency symbol
+                        topPadding: 0
+                        bottomPadding: 0
+                        verticalAlignment: TextInput.AlignVCenter
+                        placeholderText: "0"
+                        validator: DoubleValidator {
+                            bottom: 0.01
+                            top: 10000000
+                            decimals: 4
+                            notation: DoubleValidator.StandardNotation
+                        }
+                        onTextChanged: root.transferAmount = text
+                        color: "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: 17
+                        background: Item {}
+                        placeholderTextColor: "#3a3a3a"
+                    }
+
+                    Text {
+                        anchors.right: parent.right
                         anchors.rightMargin: 16
-                        spacing: 8
-
-                        QQC2.TextField {
-                            id: amountField
-                            Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignVCenter
-                            placeholderText: "0"
-                            leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
-                            validator: DoubleValidator {
-                                bottom: 0.01
-                                top: 10000000
-                                decimals: 4
-                                notation: DoubleValidator.StandardNotation
-                            }
-                            onTextChanged: root.transferAmount = text
-                            color: "#FFFFFF"
-                            font.bold: true
-                            font.pixelSize: 17
-                            background: Item {}
-                            placeholderTextColor: "#3a3a3a"
-                        }
-
-                        Text {
-                            text: root.currencySymbols[root.transferTargetCurrency] || root.transferTargetCurrency
-                            color: "#2BAD72"
-                            font.bold: true
-                            font.pixelSize: 19
-                            Layout.alignment: Qt.AlignVCenter
-                        }
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.currencySymbols[root.transferTargetCurrency] || root.transferTargetCurrency
+                        color: "#2BAD72"
+                        font.bold: true
+                        font.pixelSize: 19
                     }
                 }
 
@@ -451,12 +453,15 @@ PlasmoidItem {
 
                     QQC2.TextField {
                         id: userField
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.left:  parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin:  16
-                        anchors.rightMargin: 16
-                        leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
+                        // Fill the whole Rectangle so the entire 48px area
+                        // is clickable. Horizontal padding gives the visual
+                        // text indent without creating a dead zone.
+                        anchors.fill: parent
+                        leftPadding: 16
+                        rightPadding: 16
+                        topPadding: 0
+                        bottomPadding: 0
+                        verticalAlignment: TextInput.AlignVCenter
                         placeholderText: root.transferUseId ? "User ID" : "Username"
                         onTextChanged: {
                             if (root.transferUseId) root.transferUserId   = text
@@ -481,12 +486,12 @@ PlasmoidItem {
 
                     QQC2.TextField {
                         id: commentField
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.left:  parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin:  16
-                        anchors.rightMargin: 16
-                        leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
+                        anchors.fill: parent
+                        leftPadding: 16
+                        rightPadding: 16
+                        topPadding: 0
+                        bottomPadding: 0
+                        verticalAlignment: TextInput.AlignVCenter
                         placeholderText: "Comment (optional)"
                         maximumLength: 255
                         onTextChanged: root.transferComment = text
