@@ -57,7 +57,11 @@ PlasmoidItem {
         }
     ]
 
-    // No tooltip — removed per request
+    // Suppress the default Plasma tooltip (Name/Description from metadata)
+    Plasmoid.toolTipItem: Item {
+        implicitWidth: 0
+        implicitHeight: 0
+    }
 
     preferredRepresentation: compactRepresentation
 
@@ -173,6 +177,7 @@ PlasmoidItem {
         type: PlasmaCore.Dialog.Normal
         hideOnWindowDeactivate: true
         flags: Qt.Dialog
+        backgroundHints: PlasmaCore.Dialog.NoBackground
 
         onVisibleChanged: {
             if (!visible) Qt.callLater(root.resetTransferForm)
@@ -182,6 +187,9 @@ PlasmoidItem {
             width: 340
             implicitHeight: dlgCol.implicitHeight + 32
             color: "#0d0d0d"
+            radius: 12
+            border.color: "#262626"
+            border.width: 1
 
             ColumnLayout {
                 id: dlgCol
@@ -197,7 +205,7 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 60
-                    radius: 8
+                    radius: 6
                     border.color: "#262626"
                     border.width: 1
                     gradient: Gradient {
@@ -269,7 +277,7 @@ PlasmoidItem {
                     Layout.fillWidth: true
                     height: 48
                     color: "#161616"
-                    radius: 8
+                    radius: 6
                     border.width: 1
                     border.color: amountField.activeFocus ? "#2BAD72" : "#262626"
 
@@ -324,7 +332,7 @@ PlasmoidItem {
                             required property var modelData
                             Layout.fillWidth: true
                             height: 36
-                            radius: 8
+                            radius: 6
                             color:        root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#161616"
                             border.color: root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#262626"
                             border.width: 1
@@ -356,7 +364,7 @@ PlasmoidItem {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        radius: 8
+                        radius: 6
                         color:        root.transferUseId ? "#2BAD72" : "#161616"
                         border.color: root.transferUseId ? "#2BAD72" : "#262626"
                         border.width: 1
@@ -380,7 +388,7 @@ PlasmoidItem {
                     Rectangle {
                         Layout.fillWidth: true
                         height: 36
-                        radius: 8
+                        radius: 6
                         color:        !root.transferUseId ? "#2BAD72" : "#161616"
                         border.color: !root.transferUseId ? "#2BAD72" : "#262626"
                         border.width: 1
@@ -407,7 +415,7 @@ PlasmoidItem {
                     Layout.fillWidth: true
                     height: 48
                     color: "#161616"
-                    radius: 8
+                    radius: 6
                     border.width: 1
                     border.color: userField.activeFocus ? "#2BAD72" : "#262626"
 
@@ -437,7 +445,7 @@ PlasmoidItem {
                     Layout.fillWidth: true
                     height: 48
                     color: "#161616"
-                    radius: 8
+                    radius: 6
                     border.width: 1
                     border.color: commentField.activeFocus ? "#2BAD72" : "#262626"
 
@@ -464,7 +472,7 @@ PlasmoidItem {
                     Layout.fillWidth: true
                     height: 36
                     visible: root.transferStatus.length > 0
-                    radius: 8
+                    radius: 6
                     color:        root.transferSuccess ? "#0d2618" : "#2a1010"
                     border.color: root.transferSuccess ? "#2BAD72" : "#884444"
                     border.width: 1
@@ -487,7 +495,7 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 44
-                    radius: 8
+                    radius: 6
                     color: {
                         if (root.pendingTransfer) return "#1a3d2b"
                         if (amountField.text.length === 0 || userField.text.length === 0) return "#161616"
