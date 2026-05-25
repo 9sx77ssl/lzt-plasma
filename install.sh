@@ -155,8 +155,10 @@ else
 fi
 
 ICON_DIR="$HOME/.local/share/icons/hicolor/64x64/apps"
-mkdir -p "$ICON_DIR" 2>/dev/null
+ICON_SVG_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+mkdir -p "$ICON_DIR" "$ICON_SVG_DIR" 2>/dev/null
 cp package/contents/ui/images/lolzteam.png "$ICON_DIR/lztbalance.png" 2>/dev/null
+cp package/contents/ui/images/lolzteam.svg "$ICON_SVG_DIR/lztbalance.svg" 2>/dev/null
 
 $TOOL -t Plasma/Applet -u package/ >/dev/null 2>&1 || $TOOL -t Plasma/Applet -i package/ >/dev/null 2>&1 || report_error "kpackagetool install failed"
 
