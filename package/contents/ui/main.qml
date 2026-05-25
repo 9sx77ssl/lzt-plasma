@@ -4,6 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
+import org.kde.notification
 
 PlasmoidItem {
     id: root
@@ -75,6 +76,16 @@ PlasmoidItem {
     toolTipMainText: " "
     toolTipSubText: " "
 
+    // ── Desktop notification for balance changes ────────────────
+    KNotification {
+        id: balanceNotif
+        componentName: "plasma_workspace"
+        eventId: "notification"
+        iconName: "lztbalance"
+        title: "Lolzteam"
+        flags: KNotification.CloseOnTimeout
+    }
+
     preferredRepresentation: compactRepresentation
 
     function openTransfer() {
@@ -108,7 +119,10 @@ PlasmoidItem {
                 PropertyChanges {
                     compactRoot.Layout.fillHeight: true
                     compactRoot.Layout.fillWidth: false
-                    compactRoot.Layout.minimumWidth: contentRow.implicitWidth
+                    // +largeSpacing on both sides keeps a visible gap to the
+                    // adjacent panel widget (BTC/ETH icons next door otherwise
+                    // butt right up against the hold text).
+                    compactRoot.Layout.minimumWidth: contentRow.implicitWidth + Kirigami.Units.largeSpacing
                     compactRoot.Layout.maximumWidth: compactRoot.Layout.minimumWidth
                 }
             },
@@ -656,8 +670,21 @@ PlasmoidItem {
 
             if (j2 && j2._job_result === "ok" && j2.user) {
                 var u = j2.user
-                rawBalance = (u.balance !== undefined && u.balance !== null) ? String(u.balance) : "0.00"
-                rawHold    = (u.hold    !== undefined && u.hold    !== null) ? String(u.hold)    : "0.00"
+                var newBalStr = (u.balance !== undefined && u.balance !== null) ? String(u.balance) : "0.00"
+
+                // Detect balance change and fire a desktop notification.
+                // Skip the very first fetch — we don't want a popup showing
+                // the entire initial balance on widget load / Plasma restart.
+                if (hasFetchedOnce) {
+                    var oldBal = parseFloat(rawBalance)
+                    var newBal = parseFloat(newBalStr)
+                    if (!isNaN(oldBal) && !isNaN(newBal) && Math.abs(newBal - oldBal) >= 0.01) {
+                        sendBalanceNotification(newBal - oldBal)
+                    }
+                }
+
+                rawBalance = newBalStr
+                rawHold    = (u.hold !== undefined && u.hold !== null) ? String(u.hold) : "0.00"
                 hasFetchedOnce = true
                 hasError = false
                 statusText = ""
@@ -694,6 +721,29 @@ PlasmoidItem {
         }
         displaySymbol = symbol
         holdPositive = hold > 0.001
+    }
+
+    // Build a "+100₽" / "−50$" string and fire a desktop notification.
+    // deltaRub is the change in raw API balance (always RUB).
+    // We convert to the user-selected display currency so the notification
+    // matches what they see in the panel.
+    function sendBalanceNotification(deltaRub) {
+        var symbol = "₽"
+        var deltaDisplay = deltaRub
+
+        if (displayCurrency !== "RUB") {
+            var rate = currencyRates[displayCurrency]
+            if (rate && rate > 0) {
+                deltaDisplay = deltaRub / rate
+                symbol = currencySymbols[displayCurrency] || displayCurrency
+            }
+        }
+
+        // Unicode minus (−) reads better than ASCII hyphen for negative deltas
+        var sign = deltaDisplay > 0 ? "+" : "−"
+        var amount = formatNumber(Math.abs(deltaDisplay))
+        balanceNotif.text = sign + amount + symbol
+        balanceNotif.sendEvent()
     }
 
     // Smart number format:
