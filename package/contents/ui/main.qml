@@ -89,6 +89,19 @@ PlasmoidItem {
         flags: Notification.CloseOnTimeout
     }
 
+    // Auto-hide the transfer status (success / error) after 2 seconds.
+    // Restarted every time transferStatus changes to a non-empty value.
+    Timer {
+        id: statusHideTimer
+        interval: 2000
+        repeat: false
+        onTriggered: root.transferStatus = ""
+    }
+    onTransferStatusChanged: {
+        if (transferStatus.length > 0) statusHideTimer.restart()
+        else                            statusHideTimer.stop()
+    }
+
     preferredRepresentation: compactRepresentation
 
     function openTransfer() {
@@ -229,7 +242,7 @@ PlasmoidItem {
                     right:  parent.right
                     margins: 16
                 }
-                spacing: 9
+                spacing: 7
 
                 // ── Header card with subtle glow ────────────────
                 Rectangle {
@@ -502,14 +515,15 @@ PlasmoidItem {
                     }
                 }
 
-                // ── Status (always reserves 36px so the dialog never
-                //   resizes mid-flight, which previously pushed the Send
-                //   button off the bottom edge). Hidden via opacity, not
-                //   `visible:`, because invisible items get removed from
-                //   the column layout entirely.
+                // ── Status (reserves a fixed slot so the dialog never
+                //   resizes mid-flight, which would push the Send button
+                //   off the bottom). Hidden via opacity (not `visible:`)
+                //   because invisible items drop out of the column layout
+                //   entirely. Slot is intentionally small — most status
+                //   messages are short and fit comfortably.
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 36
+                    height: 28
                     opacity: root.transferStatus.length > 0 ? 1 : 0
                     radius: 6
                     color:        root.transferSuccess ? "#0d2618" : "#2a1010"
@@ -520,10 +534,10 @@ PlasmoidItem {
                         anchors.centerIn: parent
                         anchors.left:   parent.left
                         anchors.right:  parent.right
-                        anchors.margins: 12
+                        anchors.margins: 10
                         text: root.transferStatus
                         color: root.transferSuccess ? "#2BAD72" : "#FFFFFF"
-                        font.pixelSize: 12
+                        font.pixelSize: 11
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
