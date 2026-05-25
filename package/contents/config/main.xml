@@ -15,9 +15,6 @@
         <entry name="displayCurrency" type="String">
             <default>RUB</default>
         </entry>
-        <entry name="currencyRefreshInterval" type="Int">
-            <default>300</default>
-        </entry>
         <entry name="apiServer" type="String">
             <default>https://prod-api.lzt.market</default>
         </entry>
