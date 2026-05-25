@@ -47,14 +47,7 @@ PlasmoidItem {
         PlasmaCore.Action {
             text: i18n("Transfer Money")
             icon.name: "document-send"
-            onTriggered: {
-                if (transferDialog.visible) {
-                    transferDialog.visible = false
-                } else {
-                    transferDialog.visualParent = root.compactRepresentationItem ?? root
-                    transferDialog.visible = true
-                }
-            }
+            onTriggered: root.openTransfer()
         },
         PlasmaCore.Action {
             text: i18n("Refresh")
@@ -73,16 +66,30 @@ PlasmoidItem {
 
     preferredRepresentation: compactRepresentation
 
+    function openTransfer() {
+        if (transferDialog.visible) {
+            transferDialog.visible = false
+        } else {
+            transferDialog.visualParent = root.compactRepresentationItem ?? root
+            transferDialog.visible = true
+        }
+    }
+
     // ────────────────────────────────────────────────────────────────
     // Panel widget
     // ────────────────────────────────────────────────────────────────
-    compactRepresentation: Item {
-        implicitWidth: Math.max(panelRow.implicitWidth + 16, 80)
+    compactRepresentation: MouseArea {
+        id: panelArea
+        implicitWidth: panelRow.implicitWidth + 6
+
+        acceptedButtons: Qt.LeftButton
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.openTransfer()
 
         RowLayout {
             id: panelRow
             anchors.centerIn: parent
-            spacing: 6
+            spacing: 5
 
             Image {
                 source: Qt.resolvedUrl("images/lolzteam.svg")
@@ -108,7 +115,7 @@ PlasmoidItem {
             Text {
                 visible: root.holdPositive && root.hasFetchedOnce && !root.hasError
                 text: "· " + root.displayHold + "₽"
-                color: "#505050"
+                color: "#707070"
                 font.pixelSize: 12
                 font.bold: true
                 Layout.alignment: Qt.AlignVCenter
@@ -133,8 +140,8 @@ PlasmoidItem {
 
         mainItem: Rectangle {
             width: 300
-            implicitHeight: dlgCol.implicitHeight + 36
-            color: "#0d0d0d"
+            implicitHeight: dlgCol.implicitHeight + 28
+            color: "#080808"
 
             ColumnLayout {
                 id: dlgCol
@@ -142,21 +149,21 @@ PlasmoidItem {
                     top:    parent.top
                     left:   parent.left
                     right:  parent.right
-                    margins: 14
+                    margins: 12
                 }
                 spacing: 8
 
                 // ── Header ──────────────────────────────────
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 50
-                    color: "#111111"
+                    height: 52
+                    color: "#272727"
                     radius: 8
-                    border.color: "#1a2e1e"
+                    border.color: "#363636"
                     border.width: 1
 
                     Rectangle {
-                        x: 0; y: 9
+                        x: 0; y: 10
                         width: 3; height: 32
                         radius: 2
                         color: "#2BAD72"
@@ -169,8 +176,8 @@ PlasmoidItem {
 
                         Image {
                             source: Qt.resolvedUrl("images/lolzteam.svg")
-                            Layout.preferredWidth: 16
-                            Layout.preferredHeight: 16
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
                             Layout.alignment: Qt.AlignVCenter
                             smooth: true; mipmap: true
                         }
@@ -179,9 +186,9 @@ PlasmoidItem {
                             text: "Transfer"
                             color: "#2BAD72"
                             font.bold: true
-                            font.pixelSize: 14
+                            font.pixelSize: 15
                             Layout.fillWidth: true
-                            leftPadding: 8
+                            leftPadding: 10
                             Layout.alignment: Qt.AlignVCenter
                         }
 
@@ -191,7 +198,7 @@ PlasmoidItem {
 
                             Text {
                                 text: root.displayText + root.displaySymbol
-                                color: "#cccccc"
+                                color: "#FFFFFF"
                                 font.pixelSize: 13
                                 font.bold: true
                                 horizontalAlignment: Text.AlignRight
@@ -200,7 +207,7 @@ PlasmoidItem {
                             Text {
                                 visible: root.holdPositive
                                 text: "hold " + root.displayHold + "₽"
-                                color: "#454545"
+                                color: "#505050"
                                 font.pixelSize: 10
                                 horizontalAlignment: Text.AlignRight
                                 anchors.right: parent.right
@@ -213,10 +220,10 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 46
-                    color: "#111111"
+                    color: "#272727"
                     radius: 8
                     border.width: 1
-                    border.color: amountField.activeFocus ? "#2BAD72" : "#222222"
+                    border.color: amountField.activeFocus ? "#2BAD72" : "#363636"
 
                     RowLayout {
                         anchors.fill: parent
@@ -229,10 +236,7 @@ PlasmoidItem {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
                             placeholderText: "0.00"
-                            leftPadding:   0
-                            rightPadding:  0
-                            topPadding:    0
-                            bottomPadding: 0
+                            leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
                             validator: DoubleValidator {
                                 bottom: 0.01
                                 top: 10000000
@@ -240,11 +244,11 @@ PlasmoidItem {
                                 notation: DoubleValidator.StandardNotation
                             }
                             onTextChanged: root.transferAmount = text
-                            color: "#ffffff"
+                            color: "#FFFFFF"
                             font.bold: true
                             font.pixelSize: 15
                             background: Item {}
-                            placeholderTextColor: "#2a2a2a"
+                            placeholderTextColor: "#505050"
                         }
 
                         Text {
@@ -273,14 +277,15 @@ PlasmoidItem {
                             Layout.fillWidth: true
                             height: 34
                             radius: 7
-                            color:        root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#111111"
-                            border.color: root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#222222"
+                            color:        root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#272727"
+                            border.color: root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#363636"
                             border.width: 1
 
                             Text {
                                 anchors.centerIn: parent
                                 text:  modelData.label
-                                color: root.transferTargetCurrency === modelData.code ? "#080808" : "#454545"
+                                color: root.transferTargetCurrency === modelData.code ? "#FFFFFF" : "#FFFFFF"
+                                opacity: root.transferTargetCurrency === modelData.code ? 1.0 : 0.55
                                 font.bold: true
                                 font.pixelSize: 12
                             }
@@ -303,14 +308,15 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         height: 34
                         radius: 7
-                        color:        root.transferUseId ? "#2BAD72" : "#111111"
-                        border.color: root.transferUseId ? "#2BAD72" : "#222222"
+                        color:        root.transferUseId ? "#2BAD72" : "#272727"
+                        border.color: root.transferUseId ? "#2BAD72" : "#363636"
                         border.width: 1
 
                         Text {
                             anchors.centerIn: parent
                             text:  "By ID"
-                            color: root.transferUseId ? "#080808" : "#454545"
+                            color: "#FFFFFF"
+                            opacity: root.transferUseId ? 1.0 : 0.55
                             font.bold: true
                             font.pixelSize: 12
                         }
@@ -325,14 +331,15 @@ PlasmoidItem {
                         Layout.fillWidth: true
                         height: 34
                         radius: 7
-                        color:        !root.transferUseId ? "#2BAD72" : "#111111"
-                        border.color: !root.transferUseId ? "#2BAD72" : "#222222"
+                        color:        !root.transferUseId ? "#2BAD72" : "#272727"
+                        border.color: !root.transferUseId ? "#2BAD72" : "#363636"
                         border.width: 1
 
                         Text {
                             anchors.centerIn: parent
                             text:  "By Username"
-                            color: !root.transferUseId ? "#080808" : "#454545"
+                            color: "#FFFFFF"
+                            opacity: !root.transferUseId ? 1.0 : 0.55
                             font.bold: true
                             font.pixelSize: 12
                         }
@@ -348,10 +355,10 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 46
-                    color: "#111111"
+                    color: "#272727"
                     radius: 8
                     border.width: 1
-                    border.color: userField.activeFocus ? "#2BAD72" : "#222222"
+                    border.color: userField.activeFocus ? "#2BAD72" : "#363636"
 
                     QQC2.TextField {
                         id: userField
@@ -360,20 +367,17 @@ PlasmoidItem {
                         anchors.right: parent.right
                         anchors.leftMargin:  14
                         anchors.rightMargin: 14
-                        leftPadding:   0
-                        rightPadding:  0
-                        topPadding:    0
-                        bottomPadding: 0
+                        leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
                         placeholderText: root.transferUseId ? "User ID" : "Username"
                         onTextChanged: {
                             if (root.transferUseId) root.transferUserId   = text
                             else                    root.transferUsername = text
                         }
-                        color: "#ffffff"
+                        color: "#FFFFFF"
                         font.bold: true
                         font.pixelSize: 13
                         background: Item {}
-                        placeholderTextColor: "#2a2a2a"
+                        placeholderTextColor: "#505050"
                     }
                 }
 
@@ -381,10 +385,10 @@ PlasmoidItem {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 46
-                    color: "#111111"
+                    color: "#272727"
                     radius: 8
                     border.width: 1
-                    border.color: commentField.activeFocus ? "#2BAD72" : "#222222"
+                    border.color: commentField.activeFocus ? "#2BAD72" : "#363636"
 
                     QQC2.TextField {
                         id: commentField
@@ -393,17 +397,14 @@ PlasmoidItem {
                         anchors.right: parent.right
                         anchors.leftMargin:  14
                         anchors.rightMargin: 14
-                        leftPadding:   0
-                        rightPadding:  0
-                        topPadding:    0
-                        bottomPadding: 0
+                        leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
                         placeholderText: "Comment (optional)"
                         maximumLength: 255
                         onTextChanged: root.transferComment = text
-                        color: "#ffffff"
+                        color: "#FFFFFF"
                         font.pixelSize: 13
                         background: Item {}
-                        placeholderTextColor: "#2a2a2a"
+                        placeholderTextColor: "#505050"
                     }
                 }
 
@@ -413,7 +414,7 @@ PlasmoidItem {
                     height: 34
                     visible: root.transferStatus.length > 0
                     radius: 7
-                    color:        root.transferSuccess ? "#071910" : "#190707"
+                    color:        root.transferSuccess ? "#0d2618" : "#2a1010"
                     border.color: root.transferSuccess ? "#2BAD72" : "#884444"
                     border.width: 1
 
@@ -423,7 +424,7 @@ PlasmoidItem {
                         anchors.right:  parent.right
                         anchors.margins: 12
                         text:  root.transferStatus
-                        color: root.transferSuccess ? "#2BAD72" : "#884444"
+                        color: root.transferSuccess ? "#2BAD72" : "#FFFFFF"
                         font.pixelSize: 12
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
@@ -437,13 +438,13 @@ PlasmoidItem {
                     height: 42
                     radius: 8
                     color: {
-                        if (root.pendingTransfer) return "#0a2018"
-                        if (amountField.text.length === 0 || userField.text.length === 0) return "#111111"
+                        if (root.pendingTransfer) return "#1a3d2b"
+                        if (amountField.text.length === 0 || userField.text.length === 0) return "#272727"
                         return "#2BAD72"
                     }
                     border.color: {
-                        if (root.pendingTransfer) return "#1a3a28"
-                        if (amountField.text.length === 0 || userField.text.length === 0) return "#222222"
+                        if (root.pendingTransfer) return "#2BAD72"
+                        if (amountField.text.length === 0 || userField.text.length === 0) return "#363636"
                         return "#2BAD72"
                     }
                     border.width: 1
@@ -453,8 +454,8 @@ PlasmoidItem {
                         text:  root.pendingTransfer ? "Sending..." : "Send"
                         color: {
                             if (root.pendingTransfer) return "#2BAD72"
-                            if (amountField.text.length === 0 || userField.text.length === 0) return "#2d2d2d"
-                            return "#080808"
+                            if (amountField.text.length === 0 || userField.text.length === 0) return "#505050"
+                            return "#FFFFFF"
                         }
                         font.bold: true
                         font.pixelSize: 13
@@ -493,7 +494,7 @@ PlasmoidItem {
 
     Connections {
         target: Plasmoid.configuration
-        function onApiKeyChanged()        {
+        function onApiKeyChanged() {
             if (root.apiKey.length > 0) { root.hasFetchedOnce = false; root.fetchAll() }
             else { root.statusText = "No API Key"; root.hasError = true }
         }
@@ -630,6 +631,7 @@ PlasmoidItem {
         return v.toFixed(4)
     }
 
+    // ── Transfer with fallback ───────────────────────────────────────
     function sendTransfer() {
         if (pendingTransfer) return
         if (apiKey.length === 0) { transferStatus = "No API Key"; transferSuccess = false; return }
@@ -660,6 +662,10 @@ PlasmoidItem {
         if (transferUseId) body.user_id  = parseInt(target, 10)
         else               body.username = target.trim()
 
+        doSendTransfer(primaryServer, body, true)
+    }
+
+    function doSendTransfer(server, body, canFallback) {
         var xhr = new XMLHttpRequest()
         xhr.timeout = 15000
 
@@ -682,22 +688,47 @@ PlasmoidItem {
                         transferStatus = resp.message || "Failed";   transferSuccess = false
                     }
                 } catch (e) { transferStatus = "Parse error"; transferSuccess = false }
-            } else if (xhr.status === 401) { transferStatus = "Bad Token";    transferSuccess = false
-            } else if (xhr.status === 429) { transferStatus = "Rate Limited"; transferSuccess = false
-            } else if (xhr.status === 0)   { transferStatus = "Offline";      transferSuccess = false
+                pendingTransfer = false
+                fetchAll()
+            } else if (xhr.status === 401) {
+                transferStatus = "Bad Token"; transferSuccess = false; pendingTransfer = false
+            } else if (xhr.status === 429) {
+                transferStatus = "Rate Limited"; transferSuccess = false; pendingTransfer = false
+            } else if ((xhr.status >= 500 && xhr.status < 600) || xhr.status === 0) {
+                // 5xx server errors or network failure → fallback
+                if (canFallback) {
+                    transferStatus = "Retrying on backup..."
+                    doSendTransfer(fallbackServer, body, false)
+                } else {
+                    if (xhr.status === 0) transferStatus = "Offline"
+                    else transferStatus = "Server Err " + xhr.status
+                    transferSuccess = false
+                    pendingTransfer = false
+                }
             } else {
+                // 4xx other than 401/429 → app-level error, don't fallback
                 try {
                     var err = JSON.parse(xhr.responseText)
-                    transferStatus = (err.errors && err.errors.length > 0) ? err.errors[0] : (err.message || ("Err " + xhr.status))
+                    transferStatus = (err.errors && err.errors.length > 0)
+                        ? err.errors[0] : (err.message || ("Err " + xhr.status))
                 } catch (e) { transferStatus = "Err " + xhr.status }
                 transferSuccess = false
+                pendingTransfer = false
             }
-            pendingTransfer = false
-            fetchAll()
         }
-        xhr.ontimeout = function() { transferStatus = "Timeout"; transferSuccess = false; pendingTransfer = false }
 
-        xhr.open("POST", primaryServer + "/balance/transfer")
+        xhr.ontimeout = function() {
+            if (canFallback) {
+                transferStatus = "Retrying on backup..."
+                doSendTransfer(fallbackServer, body, false)
+            } else {
+                transferStatus = "Timeout"
+                transferSuccess = false
+                pendingTransfer = false
+            }
+        }
+
+        xhr.open("POST", server + "/balance/transfer")
         xhr.setRequestHeader("Content-Type", "application/json")
         xhr.setRequestHeader("Accept",       "application/json")
         xhr.setRequestHeader("Authorization","Bearer " + apiKey)
