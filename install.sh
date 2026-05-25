@@ -1,173 +1,213 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# LZT Market Balance — universal installer
+# Supports Plasma 6 (KF6) on Arch, Debian, Ubuntu, Fedora, openSUSE, Gentoo,
+# RHEL/Rocky/Alma, and any derivative thereof. Falls back gracefully when the
+# package manager can't be detected.
+
+set -u
+set -o pipefail
 
 REPO="9sx77ssl/lzt-plasma"
 INSTALL_DIR="$HOME/.lzt-plasma-install"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ERROR_LOG="/tmp/lzt-plasma-install-error.log"
+APPLET_ID="org.kde.plasma.lztbalance"
 
-log_error() {
-    echo "[$(date)] $1" >> "$ERROR_LOG"
+# ── colours / output ───────────────────────────────────────────────
+if [ -t 1 ]; then
+    C_OK=$'\e[32m'; C_WARN=$'\e[33m'; C_ERR=$'\e[31m'; C_DIM=$'\e[2m'; C_RST=$'\e[0m'
+else
+    C_OK=""; C_WARN=""; C_ERR=""; C_DIM=""; C_RST=""
+fi
+say()  { printf '%s%s%s\n' "${C_DIM}»${C_RST}" " " "$*"; }
+ok()   { printf '%s✓%s %s\n' "${C_OK}" "${C_RST}" "$*"; }
+warn() { printf '%s!%s %s\n' "${C_WARN}" "${C_RST}" "$*" >&2; }
+die()  { printf '%s✗%s %s\n' "${C_ERR}" "${C_RST}" "$*" >&2
+         printf '%s  see %s%s\n' "${C_DIM}" "$ERROR_LOG" "${C_RST}" >&2
+         rm -rf "$INSTALL_DIR" 2>/dev/null
+         exit 1; }
+
+log_err() { echo "[$(date -Is)] $*" >> "$ERROR_LOG"; }
+
+run_quiet() {
+    # Run command, swallow output to ERROR_LOG, return its exit code
+    "$@" >>"$ERROR_LOG" 2>&1
 }
 
-report_error() {
-    local msg="$1"
-    log_error "$msg"
-    echo "ERROR: $msg"
-    echo "Error log: $ERROR_LOG"
-    local issue_url="https://github.com/$REPO/issues/new?title=Install+Error&body=$(echo -n "$msg" | urlencode 2>/dev/null || echo "$msg" | sed 's/ /+/g')"
-    echo "Report issue: $issue_url"
-    rm -rf "$INSTALL_DIR"
-    exit 1
-}
-
+# ── distro detection ───────────────────────────────────────────────
 detect_distro() {
-    if [ -f /etc/arch-release ]; then
-        echo "arch"
-    elif [ -f /etc/artix-release ]; then
-        echo "arch"
-    elif [ -f /etc/endeavouros-release ]; then
-        echo "arch"
-    elif [ -f /etc/manjaro-release ]; then
-        echo "arch"
-    elif [ -f /etc/garuda-release ]; then
-        echo "arch"
-    elif [ -f /etc/cachyos-release ]; then
-        echo "arch"
-    elif [ -f /etc/gentoo-release ]; then
-        echo "gentoo"
-    elif [ -f /etc/debian_version ]; then
-        echo "debian"
-    elif [ -f /etc/lsb-release ] && grep -q "Ubuntu" /etc/lsb-release 2>/dev/null; then
-        echo "ubuntu"
-    elif [ -f /etc/lsb-release ] && grep -q "Mint" /etc/lsb-release 2>/dev/null; then
-        echo "debian"
-    elif [ -f /etc/lsb-release ] && grep -q "Pop" /etc/lsb-release 2>/dev/null; then
-        echo "ubuntu"
-    elif [ -f /etc/fedora-release ]; then
-        echo "fedora"
-    elif [ -f /etc/almalinux-release ] || [ -f /etc/rocky-release ]; then
-        echo "rhel"
-    elif [ -f /etc/centos-release ]; then
-        echo "rhel"
-    elif [ -f /etc/opensuse-release ]; then
-        echo "opensuse"
-    elif [ -f /etc/kdeneon-release ]; then
-        echo "ubuntu"
+    if [ -r /etc/os-release ]; then
+        . /etc/os-release
+        case " $ID $ID_LIKE " in
+            *" arch "*|*" archlinux "*)    echo "arch"   ;;
+            *" debian "*|*" ubuntu "*)     echo "debian" ;;
+            *" fedora "*)                  echo "fedora" ;;
+            *" rhel "*|*" centos "*)       echo "rhel"   ;;
+            *" suse "*|*" opensuse "*)     echo "suse"   ;;
+            *" gentoo "*)                  echo "gentoo" ;;
+            *)
+                # try by ID alone
+                case "$ID" in
+                    arch|artix|manjaro|endeavouros|garuda|cachyos)  echo "arch"   ;;
+                    debian|ubuntu|linuxmint|pop|kdeneon|kali|elementary) echo "debian" ;;
+                    fedora|nobara)                                  echo "fedora" ;;
+                    rhel|centos|rocky|almalinux|ol)                 echo "rhel"   ;;
+                    opensuse*|sles|suse)                            echo "suse"   ;;
+                    gentoo)                                         echo "gentoo" ;;
+                    *)                                              echo "unknown" ;;
+                esac
+                ;;
+        esac
     else
         echo "unknown"
     fi
 }
 
-DISTRO=$(detect_distro)
+# ── ensure dependencies (best-effort) ──────────────────────────────
+ensure_deps() {
+    local distro="$1"
+    say "Distro detected: ${distro}"
 
-install_deps() {
-    case "$DISTRO" in
+    # If kpackagetool6 already exists, deps are satisfied
+    if command -v kpackagetool6 >/dev/null 2>&1; then
+        ok "kpackagetool6 found, skipping dependency install"
+        return 0
+    fi
+
+    say "Installing Plasma 6 / KF6 dependencies (may prompt for sudo)…"
+
+    case "$distro" in
         arch)
-            if command -v pacman &>/dev/null; then
-                sudo pacman -S --needed --noconfirm plasma-framework git curl wget 2>/dev/null || true
-            fi
+            run_quiet sudo pacman -Sy --needed --noconfirm plasma-framework git curl wget
             ;;
-        gentoo)
-            if command -v emerge &>/dev/null; then
-                sudo emerge -q kde-plasma/plasma-framework dev-vcs/git net-misc/curl net-misc/wget 2>/dev/null || true
-            fi
-            ;;
-        debian|ubuntu)
-            if command -v apt &>/dev/null; then
-                sudo apt update -qq 2>/dev/null || true
-                sudo apt install -y plasma-framework git curl wget 2>/dev/null || true
-            fi
+        debian)
+            run_quiet sudo apt-get update
+            # Plasma 6 packages in Debian/Ubuntu use kf6 prefix
+            run_quiet sudo apt-get install -y plasma-framework git curl wget \
+                || run_quiet sudo apt-get install -y kf6-plasma-framework git curl wget
             ;;
         fedora)
-            if command -v dnf &>/dev/null; then
-                sudo dnf install -y kf6-plasma-framework git curl wget 2>/dev/null || true
-            fi
+            run_quiet sudo dnf install -y kf6-plasma-framework git curl wget \
+                || run_quiet sudo dnf install -y plasma-framework git curl wget
             ;;
         rhel)
-            if command -v dnf &>/dev/null; then
-                sudo dnf install -y kf6-plasma-framework git curl wget 2>/dev/null || true
-            fi
+            run_quiet sudo dnf install -y kf6-plasma-framework git curl wget
             ;;
-        opensuse)
-            if command -v zypper &>/dev/null; then
-                sudo zypper install -y plasma6-framework git curl wget 2>/dev/null || true
-            fi
+        suse)
+            run_quiet sudo zypper install -y plasma6-framework git curl wget \
+                || run_quiet sudo zypper install -y plasma-framework6 git curl wget
+            ;;
+        gentoo)
+            run_quiet sudo emerge -q kde-frameworks/plasma-framework dev-vcs/git net-misc/curl net-misc/wget
+            ;;
+        *)
+            warn "Unknown distro — assuming Plasma 6 is already installed"
             ;;
     esac
 }
 
-restart_plasma() {
-    if command -v kquitapp6 &>/dev/null && command -v kstart &>/dev/null; then
-        kquitapp6 plasmashell 2>/dev/null || true
-        sleep 2
-        kstart plasmashell 2>/dev/null || true
-    elif command -v plasmashell &>/dev/null; then
-        plasmashell --replace 2>/dev/null || true
+# ── fetch source ───────────────────────────────────────────────────
+fetch_source() {
+    # If we're already running from inside a clone of this repo, just use it
+    if [ -d "$SCRIPT_DIR/.git" ] && [ -d "$SCRIPT_DIR/package" ]; then
+        local remote
+        remote="$(cd "$SCRIPT_DIR" && git remote get-url origin 2>/dev/null || true)"
+        if [[ "$remote" == *"$REPO"* ]]; then
+            say "Running from local clone — pulling latest"
+            ( cd "$SCRIPT_DIR" && run_quiet git pull --depth 1 ) || warn "git pull failed, using local state"
+            SOURCE_DIR="$SCRIPT_DIR"
+            return 0
+        fi
     fi
+
+    # Otherwise download fresh into INSTALL_DIR
+    mkdir -p "$INSTALL_DIR" 2>/dev/null || die "Cannot create $INSTALL_DIR"
+
+    if command -v git >/dev/null 2>&1; then
+        say "Cloning $REPO"
+        rm -rf "$INSTALL_DIR/lzt-plasma" 2>/dev/null
+        if run_quiet git clone --depth 1 "https://github.com/$REPO.git" "$INSTALL_DIR/lzt-plasma"; then
+            SOURCE_DIR="$INSTALL_DIR/lzt-plasma"
+            return 0
+        fi
+    fi
+
+    say "Falling back to tarball download"
+    local tar="$INSTALL_DIR/lzt-plasma.tar.gz"
+    if command -v curl >/dev/null 2>&1; then
+        run_quiet curl -sSL -o "$tar" "https://github.com/$REPO/archive/refs/heads/main.tar.gz" || die "curl download failed"
+    elif command -v wget >/dev/null 2>&1; then
+        run_quiet wget -q -O "$tar" "https://github.com/$REPO/archive/refs/heads/main.tar.gz"   || die "wget download failed"
+    else
+        die "Need one of: git, curl, wget"
+    fi
+
+    run_quiet tar -xzf "$tar" -C "$INSTALL_DIR" || die "tar extraction failed"
+    rm -f "$tar"
+
+    SOURCE_DIR="$INSTALL_DIR/lzt-plasma-main"
+    [ -d "$SOURCE_DIR" ] || die "Extracted source dir missing"
 }
 
-if [ -d "$SCRIPT_DIR/.git" ] && [ "$(cd "$SCRIPT_DIR" && git remote get-url origin 2>/dev/null)" = "https://github.com/$REPO.git" ]; then
-    cd "$SCRIPT_DIR"
-    git pull --depth 1 2>/dev/null
-else
-    mkdir -p "$INSTALL_DIR" 2>/dev/null || report_error "Cannot create install directory"
-    cd "$INSTALL_DIR" || report_error "Cannot enter install directory"
+# ── install the plasmoid ───────────────────────────────────────────
+install_plasmoid() {
+    cd "$SOURCE_DIR" || die "Cannot cd to $SOURCE_DIR"
 
-    if command -v git &>/dev/null; then
-        if [ -d "lzt-plasma/.git" ]; then
-            cd lzt-plasma
-            git pull --depth 1 2>/dev/null
-        else
-            rm -rf lzt-plasma 2>/dev/null
-            git clone --depth 1 "https://github.com/$REPO.git" lzt-plasma 2>/dev/null || report_error "Git clone failed"
-            cd lzt-plasma || report_error "Cannot enter lzt-plasma directory"
+    if ! command -v kpackagetool6 >/dev/null 2>&1; then
+        die "kpackagetool6 not found — install plasma-framework / kf6-plasma-framework for your distro and re-run"
+    fi
+
+    # Copy SVG to user icon theme so the widget icon resolves
+    local icon_dir="$HOME/.local/share/icons/hicolor/scalable/apps"
+    mkdir -p "$icon_dir" 2>/dev/null
+    cp -f package/contents/ui/images/lolzteam.svg "$icon_dir/lztbalance.svg" 2>/dev/null || true
+
+    # Try upgrade first, fall back to install
+    if kpackagetool6 -t Plasma/Applet -l 2>/dev/null | grep -q "^${APPLET_ID}$"; then
+        say "Upgrading existing widget"
+        if ! run_quiet kpackagetool6 -t Plasma/Applet -u package/; then
+            die "kpackagetool6 upgrade failed"
         fi
-    elif command -v curl &>/dev/null; then
-        curl -sSLO "https://github.com/$REPO/archive/refs/heads/main.tar.gz" 2>/dev/null || report_error "Curl download failed"
-        tar -xzf main.tar.gz 2>/dev/null || report_error "Tar extraction failed"
-        rm main.tar.gz 2>/dev/null
-        cd lzt-plasma-main || report_error "Cannot enter lzt-plasma-main directory"
-    elif command -v wget &>/dev/null; then
-        wget -q "https://github.com/$REPO/archive/refs/heads/main.tar.gz" 2>/dev/null || report_error "Wget download failed"
-        tar -xzf main.tar.gz 2>/dev/null || report_error "Tar extraction failed"
-        rm main.tar.gz 2>/dev/null
-        cd lzt-plasma-main || report_error "Cannot enter lzt-plasma-main directory"
     else
-        report_error "git, curl, or wget required"
+        say "Installing widget"
+        if ! run_quiet kpackagetool6 -t Plasma/Applet -i package/; then
+            die "kpackagetool6 install failed"
+        fi
     fi
-fi
 
-TOOL=""
-if command -v kpackagetool6 &>/dev/null; then
-    TOOL="kpackagetool6"
-elif command -v kpackagetool5 &>/dev/null; then
-    TOOL="kpackagetool5"
-else
-    install_deps
-    if command -v kpackagetool6 &>/dev/null; then
-        TOOL="kpackagetool6"
-    elif command -v kpackagetool5 &>/dev/null; then
-        TOOL="kpackagetool5"
+    # Rebuild KDE cache so the icon and widget show up immediately
+    run_quiet kbuildsycoca6 || true
+
+    ok "Widget installed at \$HOME/.local/share/plasma/plasmoids/${APPLET_ID}"
+}
+
+# ── restart plasmashell so the user sees the new version ───────────
+restart_plasma() {
+    if ! pgrep -x plasmashell >/dev/null 2>&1; then
+        say "plasmashell not running, skipping restart"
+        return 0
+    fi
+    say "Restarting plasmashell"
+    if command -v kquitapp6 >/dev/null 2>&1 && command -v kstart >/dev/null 2>&1; then
+        run_quiet kquitapp6 plasmashell
+        sleep 1
+        ( setsid kstart plasmashell >/dev/null 2>&1 & ) || true
     else
-        report_error "kpackagetool not found. Install plasma-framework for your distribution."
+        ( setsid plasmashell --replace >/dev/null 2>&1 & ) || true
     fi
-fi
+    ok "plasmashell restarted"
+}
 
-ICON_DIR="$HOME/.local/share/icons/hicolor/64x64/apps"
-ICON_SVG_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
-mkdir -p "$ICON_DIR" "$ICON_SVG_DIR" 2>/dev/null
-cp package/contents/ui/images/lolzteam.png "$ICON_DIR/lztbalance.png" 2>/dev/null
-cp package/contents/ui/images/lolzteam.svg "$ICON_SVG_DIR/lztbalance.svg" 2>/dev/null
+# ── main ───────────────────────────────────────────────────────────
+: > "$ERROR_LOG"
 
-$TOOL -t Plasma/Applet -u package/ >/dev/null 2>&1 || $TOOL -t Plasma/Applet -i package/ >/dev/null 2>&1 || report_error "kpackagetool install failed"
-
-if command -v kbuildsycoca6 &>/dev/null; then
-    kbuildsycoca6 2>/dev/null
-elif command -v kbuildsycoca5 &>/dev/null; then
-    kbuildsycoca5 2>/dev/null
-fi
-
-rm -rf "$INSTALL_DIR" 2>/dev/null
-echo "Successfully Installed ^.^"
+DISTRO="$(detect_distro)"
+ensure_deps "$DISTRO"
+fetch_source
+install_plasmoid
 restart_plasma
+
+# Clean up downloaded copy (keep local clone)
+[ "${SOURCE_DIR:-}" = "$INSTALL_DIR/lzt-plasma" ] && rm -rf "$INSTALL_DIR"
+
+printf '\n%sSuccessfully installed%s — right-click your panel → Add Widgets → search "LZT Market Balance"\n' "${C_OK}" "${C_RST}"

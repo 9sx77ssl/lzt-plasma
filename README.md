@@ -80,23 +80,22 @@ Right-click the widget → **Configure**:
 ## Architecture
 
 ```
-┌──────────── Panel Widget ────────────┐
-│  [SVG]  1451₽  /  10₽                │   ← compactRepresentation (MouseArea)
-└──────────────────────────────────────┘
-              │ left-click
-              ▼
-┌──────── PlasmaCore.Dialog ───────────┐
-│  ┌────────────────────────────────┐  │
-│  │ [icon] Transfer       1451₽    │  │   ← header (gradient + accent bar)
-│  │                       hold 10  │  │
-│  └────────────────────────────────┘  │
-│   [ Amount                       ₽ ]  │
-│   [ ₽ RUB    ] [ $ USD    ]           │
-│   [ By ID    ] [ By Username ]        │
-│   [ User ID                        ]  │
-│   [ Comment (optional)             ]  │
-│   [           Send                 ]  │
-└──────────────────────────────────────┘
+Panel widget  (compactRepresentation = MouseArea)
+    [SVG icon]   1451₽   /   10₽
+                       │
+                       │  left-click  /  right-click → Transfer Money
+                       ▼
+PlasmaCore.Dialog  (NoBackground, radius 12)
+    Header card
+        [icon]  Transfer                       1451 ₽
+                                              hold 10 ₽
+    Amount field                                  ₽
+    Currency picker        [ ₽ RUB ]   [ $ USD ]
+    Recipient mode         [ By ID ]   [ By Username ]
+    Recipient input        User ID / Username
+    Comment input          optional, max 255 chars
+    Status pill            success (green)  /  error (red)
+    Send button            full-width, green
 ```
 
 ## Security
