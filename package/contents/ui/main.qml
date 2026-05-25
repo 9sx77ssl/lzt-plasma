@@ -497,11 +497,15 @@ PlasmoidItem {
                     }
                 }
 
-                // ── Status ──────────────────────────────────────
+                // ── Status (always reserves 36px so the dialog never
+                //   resizes mid-flight, which previously pushed the Send
+                //   button off the bottom edge). Hidden via opacity, not
+                //   `visible:`, because invisible items get removed from
+                //   the column layout entirely.
                 Rectangle {
                     Layout.fillWidth: true
                     height: 36
-                    visible: root.transferStatus.length > 0
+                    opacity: root.transferStatus.length > 0 ? 1 : 0
                     radius: 6
                     color:        root.transferSuccess ? "#0d2618" : "#2a1010"
                     border.color: root.transferSuccess ? "#2BAD72" : "#884444"
@@ -786,7 +790,10 @@ PlasmoidItem {
         }
 
         pendingTransfer = true
-        transferStatus  = "Sending..."
+        // Clear the status row during pending — the user wants only
+        // success/fail to surface here. The Send button already shows
+        // "Sending..." as visual feedback that the request is in flight.
+        transferStatus  = ""
         transferSuccess = false
 
         var body = {
@@ -833,7 +840,8 @@ PlasmoidItem {
                 transferStatus = "Rate Limited"; transferSuccess = false; pendingTransfer = false
             } else if ((xhr.status >= 500 && xhr.status < 600) || xhr.status === 0) {
                 if (canFallback) {
-                    transferStatus = "Retrying on backup..."
+                    // Silent fallback — no intermediate "Retrying..." status.
+                    // Send button still shows "Sending..." while we retry.
                     doSendTransfer(fallbackServer, body, false)
                 } else {
                     transferStatus = xhr.status === 0 ? "Offline" : ("Server Err " + xhr.status)
@@ -851,7 +859,7 @@ PlasmoidItem {
 
         xhr.ontimeout = function() {
             if (canFallback) {
-                transferStatus = "Retrying on backup..."
+                // Silent fallback — see comment above.
                 doSendTransfer(fallbackServer, body, false)
             } else {
                 transferStatus = "Timeout"; transferSuccess = false; pendingTransfer = false
