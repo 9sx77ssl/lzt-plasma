@@ -57,18 +57,23 @@ PlasmoidItem {
         }
     ]
 
-    // Suppress the default Plasma tooltip.
-    // toolTipItem is a direct property of PlasmoidItem (not attached on Plasmoid),
-    // so use it without the `Plasmoid.` prefix — that prefix caused QML to fail
-    // with "Cannot assign to non-existent property toolTipItem" on Plasma 6.6.
+    // Suppress the default Plasma tooltip (Name/Description from metadata.json).
+    //
+    // toolTipItem / toolTipMainText / toolTipSubText are properties of
+    // PlasmoidItem itself — NOT of the `Plasmoid` attached object.
+    //
+    // The `Plasmoid` attached type maps to Plasma::Applet, which only exposes
+    //   contextualActions, configuration, formFactor, status, busy,
+    //   backgroundHints, metaData, etc. (verified in applet.h)
+    // Using `Plasmoid.toolTipMainText:` triggers QML error
+    //   "Cannot assign to non-existent property toolTipMainText"
+    // because Applet has no such property. Always use these without prefix.
     toolTipItem: Item {
         implicitWidth: 0
         implicitHeight: 0
     }
-    // Defensive fallback: if toolTipItem isn't honored by some Plasma version,
-    // these non-empty strings keep the metadata Name/Description fallback off.
-    Plasmoid.toolTipMainText: " "
-    Plasmoid.toolTipSubText: " "
+    toolTipMainText: " "
+    toolTipSubText: " "
 
     preferredRepresentation: compactRepresentation
 
