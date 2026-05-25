@@ -155,11 +155,12 @@ PlasmoidItem {
             id: contentRow
             anchors.centerIn: parent
             spacing: Kirigami.Units.smallSpacing
+            Layout.alignment: Qt.AlignVCenter
 
             Image {
                 source: Qt.resolvedUrl("images/lolzteam.svg")
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                 Layout.alignment: Qt.AlignVCenter
                 smooth: true
                 mipmap: true
@@ -173,7 +174,7 @@ PlasmoidItem {
                 }
                 color: root.hasError ? "#884444" : "#2BAD72"
                 font.bold: true
-                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize
+                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -181,7 +182,7 @@ PlasmoidItem {
                 visible: root.holdPositive && root.hasFetchedOnce && !root.hasError
                 text: "/"
                 color: "#404040"
-                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize
+                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -190,7 +191,7 @@ PlasmoidItem {
                 text: root.displayHold + root.displaySymbol
                 color: "#707070"
                 font.bold: true
-                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize
+                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
                 Layout.alignment: Qt.AlignVCenter
             }
         }
