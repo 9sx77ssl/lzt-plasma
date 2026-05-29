@@ -77,6 +77,105 @@ Item {
         return value
     }
 
+    // ── Sort by USD price ───────────────────────────────────────────
+    // The config page has no live rates, so the sort button fetches /currency
+    // once (using the token from the LZT tab) and orders coins by their price
+    // in USD. First click = expensive→cheap, next click = cheap→expensive.
+    property bool   sortDesc:   true
+    property string sortStatus: ""
+    property bool   sortBusy:   false
+
+    Timer { id: statusClear; interval: 2600; onTriggered: page.sortStatus = "" }
+
+    function setStatus(msg, busy) {
+        sortStatus = msg
+        sortBusy = busy === true
+        if (!sortBusy && msg.length > 0) statusClear.restart()
+        else statusClear.stop()
+    }
+
+    // Read a config value from the config page (plasmoid context property).
+    function cfgGet(name, dflt) {
+        try {
+            if (typeof plasmoid !== 'undefined' && plasmoid && plasmoid.configuration) {
+                var v = plasmoid.configuration[name]
+                if (v !== undefined && v !== null) return v
+            }
+        } catch (e) {}
+        return dflt
+    }
+
+    function requestSort() {
+        if (coinsModel.count < 2) return
+        var key = cfgGet("apiKey", "")
+        if (!key || String(key).length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
+        var server = cfgGet("apiServer", "https://prod-api.lzt.market")
+        setStatus(i18n("Sorting…"), true)
+        doFetchRates(String(server), String(key), true)
+    }
+
+    function doFetchRates(server, key, canFallback) {
+        var fallback = (server === "https://prod-api.lzt.market")
+            ? "https://api.lzt.market" : "https://prod-api.lzt.market"
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText)
+                    var j = (data && data.jobs) ? data.jobs["1"] : null
+                    if (j && j._job_result === "ok" && j.currencyList) {
+                        var rates = {}
+                        for (var k in j.currencyList)
+                            if (j.currencyList.hasOwnProperty(k) && j.currencyList[k].rate > 0)
+                                rates[k] = j.currencyList[k].rate
+                        applySort(rates)
+                        return
+                    }
+                } catch (e) {}
+                setStatus(i18n("Sort failed"))
+            } else if (xhr.status === 401) {
+                setStatus(i18n("Bad API token"))
+            } else if (canFallback) {
+                doFetchRates(fallback, key, false)
+            } else {
+                setStatus(i18n("Sort failed"))
+            }
+        }
+        xhr.ontimeout = function() {
+            if (canFallback) doFetchRates(fallback, key, false)
+            else setStatus(i18n("Sort timed out"))
+        }
+        xhr.open("POST", server + "/batch")
+        xhr.setRequestHeader("Content-Type",  "application/json")
+        xhr.setRequestHeader("Accept",        "application/json")
+        xhr.setRequestHeader("Authorization", "Bearer " + key)
+        xhr.send(JSON.stringify([{ method: "GET", uri: server + "/currency", id: "1" }]))
+    }
+
+    // Coin price in USD (rates are RUB-per-unit). Missing rate -> -1 (sinks).
+    function priceUSD(rates, code) {
+        var b = rates[code], q = rates["USD"]
+        if (!b || !q || q <= 0) return -1
+        return b / q
+    }
+
+    function applySort(rates) {
+        var arr = []
+        for (var i = 0; i < coinsModel.count; i++) {
+            var it = coinsModel.get(i)
+            arr.push({ code: it.code, currency: it.currency, p: priceUSD(rates, it.code) })
+        }
+        arr.sort(function(a, b) { return page.sortDesc ? (b.p - a.p) : (a.p - b.p) })
+        coinsModel.clear()
+        for (var j = 0; j < arr.length; j++)
+            coinsModel.append({ code: arr[j].code, currency: arr[j].currency })
+        saveCoins()
+        page.sortDesc = !page.sortDesc
+        setStatus("")
+    }
+
     // ── Edit dialog state ───────────────────────────────────────────
     property int editIndex: -1
 
@@ -189,7 +288,25 @@ Item {
                 onClicked: { coinsModel.remove(coinsList.currentIndex); page.saveCoins() }
             }
 
+            PlasmaComponents.Label {
+                text: page.sortStatus
+                visible: text.length > 0
+                opacity: 0.7
+                Layout.leftMargin: Kirigami.Units.smallSpacing
+                elide: Text.ElideRight
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 12
+            }
+
             Item { Layout.fillWidth: true }
+
+            PlasmaComponents.ToolButton {
+                icon.name: page.sortDesc ? "view-sort-descending" : "view-sort-ascending"
+                display: QQC2.AbstractButton.IconOnly
+                enabled: coinsModel.count > 1 && !page.sortBusy
+                QQC2.ToolTip.text: i18n("Sort by price (USD)")
+                QQC2.ToolTip.visible: hovered
+                onClicked: page.requestSort()
+            }
 
             PlasmaComponents.ToolButton {
                 icon.name: "arrow-up"
