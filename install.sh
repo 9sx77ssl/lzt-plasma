@@ -160,8 +160,9 @@ install_plasmoid() {
     # Copy SVG to user icon theme so the widget icon resolves
     local icon_dir="$HOME/.local/share/icons/hicolor/scalable/apps"
     mkdir -p "$icon_dir" 2>/dev/null
-    cp -f package/contents/ui/images/lolzteam.svg "$icon_dir/lztbalance.svg" 2>/dev/null || true
-    cp -f package/contents/ui/images/help.svg     "$icon_dir/lzt-help.svg"   2>/dev/null || true
+    cp -f package/contents/ui/images/lolzteam.svg   "$icon_dir/lztbalance.svg" 2>/dev/null || true
+    cp -f package/contents/ui/images/help.svg       "$icon_dir/lzt-help.svg"   2>/dev/null || true
+    cp -f package/contents/ui/images/crypto-tab.svg "$icon_dir/lzt-crypto.svg" 2>/dev/null || true
 
     # Try upgrade first, fall back to install
     if kpackagetool6 -t Plasma/Applet -l 2>/dev/null | grep -q "^${APPLET_ID}$"; then
