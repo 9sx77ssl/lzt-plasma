@@ -34,11 +34,17 @@ Item {
         return Qt.resolvedUrl("../images/crypto/" + f + ".svg")
     }
 
+    // True while saveCoins() is writing serialized.text — prevents the
+    // onTextChanged handler from rebuilding the model (which would reset the
+    // ListView selection). We only rebuild on external loads (initial config).
+    property bool suppressReload: false
+
     // Serialized JSON <-> ListModel mirror.
     Text {
         id: serialized
         visible: false
         onTextChanged: {
+            if (page.suppressReload) return
             coinsModel.clear()
             var arr = []
             try { arr = JSON.parse(serialized.text) } catch (e) { arr = [] }
@@ -60,7 +66,9 @@ Item {
             var it = coinsModel.get(i)
             out.push({ code: it.code, currency: it.currency })
         }
+        suppressReload = true
         serialized.text = JSON.stringify(out)
+        suppressReload = false
     }
 
     function currencyLabel(value) {
