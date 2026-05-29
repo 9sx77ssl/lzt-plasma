@@ -3,6 +3,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
+import "../secret.js" as Secret
 
 Item {
     id: page
@@ -81,11 +82,13 @@ Item {
     // The config page has no live rates, so the sort button fetches /currency
     // once (using the token from the LZT tab) and orders coins by their price
     // in USD. First click = expensive→cheap, next click = cheap→expensive.
-    property bool   sortDesc:   true
-    property string sortStatus: ""
-    property bool   sortBusy:   false
+    property bool   sortDesc:     true
+    property string sortStatus:   ""
+    property bool   sortBusy:      false
+    property bool   sortCooldown:  false   // silent 1-click-per-second throttle
 
-    Timer { id: statusClear; interval: 2600; onTriggered: page.sortStatus = "" }
+    Timer { id: statusClear;       interval: 2600; onTriggered: page.sortStatus = "" }
+    Timer { id: sortCooldownTimer; interval: 1000; onTriggered: page.sortCooldown = false }
 
     function setStatus(msg, busy) {
         sortStatus = msg
@@ -106,12 +109,15 @@ Item {
     }
 
     function requestSort() {
+        if (sortCooldown) return            // silently swallow rapid clicks
         if (coinsModel.count < 2) return
-        var key = cfgGet("apiKey", "")
-        if (!key || String(key).length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
+        var key = Secret.decode(cfgGet("apiKey", ""))
+        if (!key || key.length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
+        sortCooldown = true
+        sortCooldownTimer.restart()
         var server = cfgGet("apiServer", "https://prod-api.lzt.market")
         setStatus(i18n("Sorting…"), true)
-        doFetchRates(String(server), String(key), true)
+        doFetchRates(String(server), key, true)
     }
 
     function doFetchRates(server, key, canFallback) {
@@ -235,6 +241,9 @@ Item {
                             source: page.iconSource(model.code)
                             Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                             Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                            fillMode: Image.PreserveAspectFit
+                            sourceSize.width: Kirigami.Units.iconSizes.smallMedium
+                            sourceSize.height: Kirigami.Units.iconSizes.smallMedium
                             smooth: true; mipmap: true
                         }
                         PlasmaComponents.Label {

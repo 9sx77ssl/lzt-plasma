@@ -53,6 +53,3 @@ function parseCryptoList(str) {
         return []
     }
 }
-
-if (typeof module !== 'undefined')
-    module.exports = { convert: convert, formatRate: formatRate, parseCryptoList: parseCryptoList, trimZeros: trimZeros, groupThousands: groupThousands }

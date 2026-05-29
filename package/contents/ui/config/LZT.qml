@@ -2,15 +2,23 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import "../secret.js" as Secret
 
 Kirigami.FormLayout {
     id: configPage
     wideMode: true
 
-    property alias cfg_apiKey:         apiKeyField.text
-    property alias cfg_updateInterval: intervalSpinBox.value
-    property alias cfg_displayCurrency:currencyCombo.currentValue
-    property alias cfg_apiServer:      serverCombo.currentValue
+    // cfg_apiKey stores the OBFUSCATED token; the visible field shows the raw
+    // one. We decode on load and encode on edit so plain text never persists.
+    property string cfg_apiKey: ""
+    property alias  cfg_updateInterval: intervalSpinBox.value
+    property alias  cfg_displayCurrency:currencyCombo.currentValue
+    property alias  cfg_apiServer:      serverCombo.currentValue
+
+    function syncKeyField() { apiKeyField.text = Secret.decode(cfg_apiKey) }
+    Component.onCompleted: syncKeyField()
+    // Re-sync when the stored value arrives/changes, unless the user is typing.
+    onCfg_apiKeyChanged: if (!apiKeyField.activeFocus) syncKeyField()
 
     Kirigami.Separator {
         Kirigami.FormData.isSection: true
@@ -23,6 +31,7 @@ Kirigami.FormLayout {
         placeholderText: "LZT Bearer token"
         echoMode: TextInput.Password
         Layout.fillWidth: true
+        onTextEdited: configPage.cfg_apiKey = Secret.encode(text)
     }
 
     QQC2.ComboBox {

@@ -84,18 +84,12 @@ Every refresh sends a single `POST /batch` with two jobs — `/currency` and `/m
 ## Privacy & safety
 
 - Talks **only** to `*.lzt.market` over HTTPS — no telemetry, no third-party calls.
-- The API token is stored in Plasma's per-user config (`~/.config/plasma-org.kde.plasma.desktop-appletsrc`) and sent only to the LZT API. It is not encrypted at rest (standard for Plasma widgets) — treat that file as private.
+- The API token is stored **obfuscated** (not as plain text) in Plasma's per-user config (`~/.config/plasma-org.kde.plasma.desktop-appletsrc`) and sent only to the LZT API. Note: this is obfuscation, not encryption — a local widget must decode the token to use it, so the key lives in the code. It stops casual reading of the config file; for true at-rest security use a system keyring.
 - Transfers retry on the backup server **only** for infrastructure errors (5xx / timeout / network drop), never on errors that could mean the first attempt already went through — so no double-sends.
 
 ## Develop
 
-Logic helpers are unit-tested with plain Node:
-
-```bash
-node tests/rates.test.js
-```
-
-The widget is pure QML/JS — no build step. Iterate locally with `./install.sh` (it detects the clone and upgrades in place).
+Pure QML/JS — no build step. Iterate locally with `./install.sh` (it detects the clone and upgrades in place, then restarts plasmashell).
 
 ## Uninstall
 

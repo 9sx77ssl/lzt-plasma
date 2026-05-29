@@ -12,4 +12,9 @@ ConfigModel {
         icon: "office-chart-line"
         source: "config/Crypto.qml"
     }
+    ConfigCategory {
+        name: "^.^"
+        icon: "lzt-help"
+        source: "config/Fun.qml"
+    }
 }

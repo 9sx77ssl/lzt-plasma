@@ -6,6 +6,7 @@ import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 import org.kde.notification
 import "rates.js" as Rates
+import "secret.js" as Secret
 
 PlasmoidItem {
     id: root
@@ -34,7 +35,7 @@ PlasmoidItem {
     property string transferUsername:       ""
     property string transferComment:        ""
 
-    readonly property string apiKey:         Plasmoid.configuration.apiKey || ""
+    readonly property string apiKey:         Secret.decode(Plasmoid.configuration.apiKey || "")
     readonly property int    refreshMs:      (Plasmoid.configuration.updateInterval || 30) * 1000
     readonly property string displayCurrency:Plasmoid.configuration.displayCurrency || "RUB"
     readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://prod-api.lzt.market"
@@ -243,6 +244,9 @@ PlasmoidItem {
                         Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                         Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                         Layout.alignment: Qt.AlignVCenter
+                        fillMode: Image.PreserveAspectFit
+                        sourceSize.width: Kirigami.Units.iconSizes.smallMedium
+                        sourceSize.height: Kirigami.Units.iconSizes.smallMedium
                         smooth: true; mipmap: true
                     }
                     Text {
@@ -648,6 +652,9 @@ PlasmoidItem {
     }
 
     Component.onCompleted: {
+        // Migrate any legacy plain-text token to the obfuscated form on disk.
+        var stored = Plasmoid.configuration.apiKey || ""
+        if (Secret.isPlain(stored)) Plasmoid.configuration.apiKey = Secret.encode(stored)
         rebuildCryptoEntries()
         if (apiKey.length > 0) fetchAll()
         else { statusText = "No API Key"; hasError = true }
