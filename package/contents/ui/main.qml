@@ -5,6 +5,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 import org.kde.notification
+import "rates.js" as Rates
 
 PlasmoidItem {
     id: root
@@ -44,6 +45,9 @@ PlasmoidItem {
         "RUB": "₽", "USD": "$", "EUR": "€", "UAH": "₴",
         "GBP": "£", "BYN": "Br", "KZT": "₸", "BTC": "₿"
     })
+
+    // Parsed from Plasmoid.configuration.cryptoList; drives the panel Repeater.
+    property var cryptoEntries: []
 
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
@@ -206,6 +210,45 @@ PlasmoidItem {
                 font.bold: true
                 font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
                 Layout.alignment: Qt.AlignVCenter
+            }
+
+            // ── Separator before crypto rates ───────────────────────
+            Rectangle {
+                visible: root.cryptoEntries.length > 0
+                Layout.preferredWidth: 1
+                Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                Layout.leftMargin: Kirigami.Units.smallSpacing
+                Layout.rightMargin: Kirigami.Units.smallSpacing
+                Layout.alignment: Qt.AlignVCenter
+                color: "#404040"
+            }
+
+            // ── Crypto rates ────────────────────────────────────────
+            Repeater {
+                model: root.cryptoEntries
+                delegate: RowLayout {
+                    required property var modelData
+                    spacing: Kirigami.Units.smallSpacing
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Image {
+                        source: {
+                            var f = (modelData.code === "MATIC") ? "pol" : String(modelData.code).toLowerCase()
+                            return Qt.resolvedUrl("images/crypto/" + f + ".svg")
+                        }
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        Layout.alignment: Qt.AlignVCenter
+                        smooth: true; mipmap: true
+                    }
+                    Text {
+                        text: root.cryptoText(modelData)
+                        color: modelData.color || "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                }
             }
         }
     }
@@ -601,6 +644,7 @@ PlasmoidItem {
     }
 
     Component.onCompleted: {
+        rebuildCryptoEntries()
         if (apiKey.length > 0) fetchAll()
         else { statusText = "No API Key"; hasError = true }
     }
@@ -614,6 +658,7 @@ PlasmoidItem {
         function onUpdateIntervalChanged() { refreshTimer.restart() }
         function onDisplayCurrencyChanged(){ root.recalcDisplay() }
         function onApiServerChanged()      { root.fetchAll() }
+        function onCryptoListChanged()     { root.rebuildCryptoEntries() }
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -631,6 +676,18 @@ PlasmoidItem {
         transferSuccess   = false
         transferUseId     = true
         transferTargetCurrency = "RUB"
+    }
+
+    function rebuildCryptoEntries() {
+        cryptoEntries = Rates.parseCryptoList(Plasmoid.configuration.cryptoList)
+    }
+
+    // Display string for one crypto entry, e.g. "73328$".
+    function cryptoText(entry) {
+        if (!hasFetchedOnce) return "…"
+        var v = Rates.convert(currencyRates, entry.code, entry.currency)
+        var sym = currencySymbols[entry.currency] || entry.currency
+        return Rates.formatRate(v) + sym
     }
 
     function fetchAll() {
