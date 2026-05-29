@@ -303,7 +303,7 @@ Item {
                 icon.name: page.sortDesc ? "view-sort-descending" : "view-sort-ascending"
                 display: QQC2.AbstractButton.IconOnly
                 enabled: coinsModel.count > 1 && !page.sortBusy
-                QQC2.ToolTip.text: i18n("Sort by price (USD)")
+                QQC2.ToolTip.text: i18n("Sort by price")
                 QQC2.ToolTip.visible: hovered
                 onClicked: page.requestSort()
             }
