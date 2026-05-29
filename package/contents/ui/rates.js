@@ -19,14 +19,22 @@ function trimZeros(s) {
     return s.replace(/\.?0+$/, "")
 }
 
+// Group an integer with a non-breaking space every 3 digits: 5218726 -> "5 218 726".
+// NBSP (U+00A0) keeps the number on one line and reads cleaner than a normal space.
+function groupThousands(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, String.fromCharCode(0xa0))
+}
+
 // Format a converted rate for the panel:
-//   >= 1000     -> integer            (73328)
+//   >= 10000    -> grouped integer    (73 595)
+//   1000..9999  -> plain integer      (2007)
 //   1 .. 1000   -> up to 2 decimals   (2.46 / 382)
 //   0 .. 1      -> 4 significant figs  (0.0042) — needed for SHIB-class values
 //   null/NaN/<=0 -> "…"
 function formatRate(v) {
     if (v === null || v === undefined || isNaN(v) || v <= 0) return "…"
-    if (v >= 1000) return String(Math.round(v))
+    if (v >= 10000) return groupThousands(Math.round(v))
+    if (v >= 1000)  return String(Math.round(v))
     if (v >= 1) {
         var r = Math.round(v * 100) / 100
         if (Math.abs(r - Math.round(r)) < 0.005) return String(Math.round(r))
@@ -47,4 +55,4 @@ function parseCryptoList(str) {
 }
 
 if (typeof module !== 'undefined')
-    module.exports = { convert: convert, formatRate: formatRate, parseCryptoList: parseCryptoList, trimZeros: trimZeros }
+    module.exports = { convert: convert, formatRate: formatRate, parseCryptoList: parseCryptoList, trimZeros: trimZeros, groupThousands: groupThousands }
