@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
-import QtQuick.Dialogs as Dialogs
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
 
@@ -35,7 +34,7 @@ Item {
         return Qt.resolvedUrl("../images/crypto/" + f + ".svg")
     }
 
-    // Serialized JSON <-> ListModel mirror (crypto-tracker pattern).
+    // Serialized JSON <-> ListModel mirror.
     Text {
         id: serialized
         visible: false
@@ -47,8 +46,7 @@ Item {
             for (var i = 0; i < arr.length; i++) {
                 coinsModel.append({
                     code:     arr[i].code     || "BTC",
-                    currency: arr[i].currency || "USD",
-                    color:    arr[i].color    || "#FFFFFF"
+                    currency: arr[i].currency || "USD"
                 })
             }
         }
@@ -60,7 +58,7 @@ Item {
         var out = []
         for (var i = 0; i < coinsModel.count; i++) {
             var it = coinsModel.get(i)
-            out.push({ code: it.code, currency: it.currency, color: it.color })
+            out.push({ code: it.code, currency: it.currency })
         }
         serialized.text = JSON.stringify(out)
     }
@@ -72,14 +70,12 @@ Item {
     }
 
     // ── Edit dialog state ───────────────────────────────────────────
-    property int    editIndex: -1
-    property string editColor: "#FFFFFF"
+    property int editIndex: -1
 
     function openAdd() {
         editIndex = -1
         coinCombo.currentIndex = 0
         currencyCombo.currentIndex = 1   // USD
-        editColor = "#FFFFFF"
         editDialog.open()
     }
     function openEdit(idx) {
@@ -91,14 +87,13 @@ Item {
         for (var i = 0; i < currencyModel.length; i++)
             if (currencyModel[i].value === it.currency) { ci = i; break }
         currencyCombo.currentIndex = ci
-        editColor = it.color
         editDialog.open()
     }
 
-    // ── Layout ──────────────────────────────────────────────────────
-    RowLayout {
+    // ── Layout: list on top, action toolbar underneath ──────────────
+    ColumnLayout {
         anchors.fill: parent
-        spacing: Kirigami.Units.largeSpacing
+        spacing: Kirigami.Units.smallSpacing
 
         Rectangle {
             Layout.fillWidth: true
@@ -106,6 +101,7 @@ Item {
             color: Kirigami.Theme.backgroundColor
             border.color: Kirigami.Theme.disabledTextColor
             border.width: 1
+            radius: 3
 
             ListView {
                 id: coinsList
@@ -114,18 +110,19 @@ Item {
                 clip: true
                 model: coinsModel
                 currentIndex: -1
+                boundsBehavior: Flickable.StopAtBounds   // no jerky overscroll
 
                 delegate: Rectangle {
                     width: coinsList.width
-                    height: 38
+                    height: 40
                     color: ListView.isCurrentItem ? Kirigami.Theme.highlightColor
                          : (index % 2 === 0 ? Kirigami.Theme.backgroundColor : Kirigami.Theme.alternateBackgroundColor)
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        spacing: 10
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        spacing: 12
 
                         Image {
                             source: page.iconSource(model.code)
@@ -137,16 +134,12 @@ Item {
                             text: model.code
                             font.bold: true
                             Layout.preferredWidth: 70
+                            color: coinsList.currentIndex === index ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                         }
                         PlasmaComponents.Label {
                             text: page.currencyLabel(model.currency)
                             Layout.fillWidth: true
-                        }
-                        Rectangle {
-                            width: 18; height: 18; radius: 3
-                            color: model.color
-                            border.color: Kirigami.Theme.disabledTextColor
-                            border.width: 1
+                            color: coinsList.currentIndex === index ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
                         }
                     }
 
@@ -168,34 +161,34 @@ Item {
             }
         }
 
-        ColumnLayout {
-            Layout.alignment: Qt.AlignTop
-            Layout.fillWidth: false
+        // ── Action toolbar ──────────────────────────────────────────
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
 
             PlasmaComponents.Button {
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
                 text: i18n("Add"); icon.name: "list-add"
                 onClicked: page.openAdd()
             }
             PlasmaComponents.Button {
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
                 text: i18n("Edit"); icon.name: "edit-entry"
                 enabled: coinsList.currentIndex >= 0 && coinsList.currentIndex < coinsModel.count
                 onClicked: page.openEdit(coinsList.currentIndex)
             }
             PlasmaComponents.Button {
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
                 text: i18n("Remove"); icon.name: "list-remove"
                 enabled: coinsList.currentIndex >= 0 && coinsList.currentIndex < coinsModel.count
-                onClicked: {
-                    coinsModel.remove(coinsList.currentIndex)
-                    page.saveCoins()
-                }
+                onClicked: { coinsModel.remove(coinsList.currentIndex); page.saveCoins() }
             }
-            PlasmaComponents.Button {
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                text: i18n("Move Up"); icon.name: "arrow-up"
+
+            Item { Layout.fillWidth: true }
+
+            PlasmaComponents.ToolButton {
+                icon.name: "arrow-up"
+                display: QQC2.AbstractButton.IconOnly
                 enabled: coinsList.currentIndex > 0 && coinsList.currentIndex < coinsModel.count
+                QQC2.ToolTip.text: i18n("Move up")
+                QQC2.ToolTip.visible: hovered
                 onClicked: {
                     var from = coinsList.currentIndex
                     coinsModel.move(from, from - 1, 1)
@@ -203,10 +196,12 @@ Item {
                     page.saveCoins()
                 }
             }
-            PlasmaComponents.Button {
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                text: i18n("Move Down"); icon.name: "arrow-down"
+            PlasmaComponents.ToolButton {
+                icon.name: "arrow-down"
+                display: QQC2.AbstractButton.IconOnly
                 enabled: coinsList.currentIndex >= 0 && (coinsList.currentIndex + 1) < coinsModel.count
+                QQC2.ToolTip.text: i18n("Move down")
+                QQC2.ToolTip.visible: hovered
                 onClicked: {
                     var from = coinsList.currentIndex
                     coinsModel.move(from, from + 1, 1)
@@ -228,8 +223,7 @@ Item {
         onAccepted: {
             var obj = {
                 code:     page.supportedCoins[coinCombo.currentIndex],
-                currency: page.currencyModel[currencyCombo.currentIndex].value,
-                color:    page.editColor
+                currency: page.currencyModel[currencyCombo.currentIndex].value
             }
             if (page.editIndex === -1) coinsModel.append(obj)
             else                       coinsModel.set(page.editIndex, obj)
@@ -250,32 +244,6 @@ Item {
                 model: page.currencyModel
                 textRole: "text"
             }
-            RowLayout {
-                Layout.fillWidth: true
-                PlasmaComponents.Label { text: i18n("Color:") }
-                Rectangle {
-                    Layout.preferredWidth: 28; Layout.preferredHeight: 28
-                    radius: 4
-                    color: page.editColor
-                    border.color: Kirigami.Theme.disabledTextColor
-                    border.width: 1
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            colorDialog.selectedColor = page.editColor
-                            colorDialog.open()
-                        }
-                    }
-                }
-                PlasmaComponents.Label { text: page.editColor; opacity: 0.7 }
-                Item { Layout.fillWidth: true }
-            }
         }
-    }
-
-    Dialogs.ColorDialog {
-        id: colorDialog
-        onAccepted: page.editColor = colorDialog.selectedColor.toString()
     }
 }

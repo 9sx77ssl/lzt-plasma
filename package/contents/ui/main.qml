@@ -49,6 +49,9 @@ PlasmoidItem {
     // Parsed from Plasmoid.configuration.cryptoList; drives the panel Repeater.
     property var cryptoEntries: []
 
+    // Fixed crypto price color — a soft off-white (dimmer than pure white).
+    readonly property color cryptoColor: "#D6D6D6"
+
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
             text: i18n("Transfer Money")
@@ -230,6 +233,7 @@ PlasmoidItem {
                     required property var modelData
                     spacing: Kirigami.Units.smallSpacing
                     Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: Kirigami.Units.smallSpacing   // a little more air between coins
 
                     Image {
                         source: {
@@ -243,7 +247,7 @@ PlasmoidItem {
                     }
                     Text {
                         text: root.cryptoText(modelData)
-                        color: modelData.color || "#FFFFFF"
+                        color: root.cryptoColor
                         font.bold: true
                         font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
                         Layout.alignment: Qt.AlignVCenter
