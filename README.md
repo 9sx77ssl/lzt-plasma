@@ -18,6 +18,7 @@
 
 - **Live balance + hold** displayed in the panel: `1451₽ / 10₽`
 - **Currency conversion** by Lolzteam's own forum rates (RUB, USD, EUR, UAH, GBP, BYN, KZT, BTC)
+- **Crypto rates in the panel** — add coins (BTC, ETH, XMR, …) next to your balance, each in its own currency and color, configured in the CRYPTO tab
 - **One-click money transfer** dialog
   - Send by **User ID** or **Username**
   - Pick transfer currency (RUB or USD) independently from display currency
