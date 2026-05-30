@@ -63,6 +63,11 @@ PlasmoidItem {
             text: i18n("Refresh")
             icon.name: "view-refresh"
             onTriggered: root.fetchAll()
+        },
+        PlasmaCore.Action {
+            text: i18n("Check for updates")
+            icon.name: "update-none"
+            onTriggered: updateChecker.check(true)
         }
     ]
 
@@ -95,6 +100,12 @@ PlasmoidItem {
         iconName: "lztbalance"
         title: "Lolzteam"
         flags: Notification.CloseOnTimeout
+    }
+
+    // Checks GitHub for newer releases (daily + on demand via context menu).
+    UpdateChecker {
+        id: updateChecker
+        currentVersion: "3.6.0"
     }
 
     // Auto-hide the transfer status (success / error) after 2 seconds.
@@ -655,6 +666,14 @@ PlasmoidItem {
         // Migrate any legacy plain-text token to the obfuscated form on disk.
         var stored = Plasmoid.configuration.apiKey || ""
         if (Secret.isPlain(stored)) Plasmoid.configuration.apiKey = Secret.encode(stored)
+        // Drive the update checker from metadata (single source of truth).
+        try {
+            if (Plasmoid.metaData) {
+                if (Plasmoid.metaData.version) updateChecker.currentVersion = Plasmoid.metaData.version
+                var u = Plasmoid.metaData.value("X-LZT-UpdateChecker-Url", "")
+                if (u && u.length) updateChecker.url = u
+            }
+        } catch (e) {}
         rebuildCryptoEntries()
         if (apiKey.length > 0) fetchAll()
         else { statusText = "No API Key"; hasError = true }

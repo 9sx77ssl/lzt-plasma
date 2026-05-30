@@ -11,9 +11,10 @@
             }
         ],
         "License": "MIT",
-        "Version": "3.5.0",
+        "Version": "3.6.0",
         "Website": "https://lolz.live/gay1234"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
-    "KPackageStructure": "Plasma/Applet"
+    "KPackageStructure": "Plasma/Applet",
+    "X-LZT-UpdateChecker-Url": "https://raw.githubusercontent.com/9sx77ssl/lzt-plasma/main/package/metadata.json"
 }

@@ -13,7 +13,7 @@ ConfigModel {
         source: "config/Crypto.qml"
     }
     ConfigCategory {
-        name: ""
+        name: "DEV"
         icon: "lzt-help"
         source: "config/Fun.qml"
     }
