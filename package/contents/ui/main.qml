@@ -35,7 +35,12 @@ PlasmoidItem {
     property string transferUsername:       ""
     property string transferComment:        ""
 
-    readonly property string apiKey:         Secret.decode(Plasmoid.configuration.apiKey || "")
+    // Decoded token; empty if stored value is empty OR if decoding failed.
+    // tokenStoredButEmpty distinguishes "no token configured" from "stored
+    // token is corrupt / decode failed" so the user gets the right status.
+    readonly property string rawStoredKey:   Plasmoid.configuration.apiKey || ""
+    readonly property string apiKey:         Secret.decode(rawStoredKey)
+    readonly property bool   tokenStoredButEmpty: rawStoredKey.length > 0 && apiKey.length === 0
     readonly property int    refreshMs:      (Plasmoid.configuration.updateInterval || 30) * 1000
     readonly property string displayCurrency:Plasmoid.configuration.displayCurrency || "RUB"
     readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://prod-api.lzt.market"
@@ -662,10 +667,35 @@ PlasmoidItem {
         onTriggered: root.fetchAll()
     }
 
+    // Recovery timer: while we have a token but haven't successfully fetched
+    // even once (e.g. system just booted, wifi still coming up, transient
+    // server hiccup), retry aggressively every 8 seconds. Auto-stops as soon
+    // as the first fetch lands. This fixes the "widget shows ... forever
+    // after suspend / system cleanup until I restart plasmashell" case —
+    // the normal 30s refresh interval is too long for cold boot.
+    Timer {
+        id: recoveryTimer
+        interval: 8000
+        repeat: true
+        running: root.apiKey.length > 0 && !root.hasFetchedOnce
+        onTriggered: {
+            console.log("[lzt] recovery-tick — not fetched yet, retrying")
+            root.fetchAll()
+        }
+    }
+
     Component.onCompleted: {
         // Migrate any legacy plain-text token to the obfuscated form on disk.
         var stored = Plasmoid.configuration.apiKey || ""
-        if (Secret.isPlain(stored)) Plasmoid.configuration.apiKey = Secret.encode(stored)
+        if (Secret.isPlain(stored)) {
+            console.log("[lzt] migrating plain token to obfuscated form")
+            Plasmoid.configuration.apiKey = Secret.encode(stored)
+        }
+
+        console.log("[lzt] init — stored.len=" + stored.length
+                  + " decoded.len=" + apiKey.length
+                  + " stored.prefix=" + (stored.length > 0 ? stored.substring(0, 4) : "<empty>"))
+
         // Drive the update checker from metadata (single source of truth).
         try {
             if (Plasmoid.metaData) {
@@ -675,8 +705,16 @@ PlasmoidItem {
             }
         } catch (e) {}
         rebuildCryptoEntries()
-        if (apiKey.length > 0) fetchAll()
-        else { statusText = "No API Key"; hasError = true }
+
+        if (apiKey.length > 0) {
+            fetchAll()
+        } else if (tokenStoredButEmpty) {
+            // Stored value isn't empty but decoded to "" — corrupt enc: blob.
+            console.log("[lzt] stored token failed to decode — len=" + stored.length)
+            statusText = "Decode Err"; hasError = true
+        } else {
+            statusText = "No API Key"; hasError = true
+        }
     }
 
     Connections {
