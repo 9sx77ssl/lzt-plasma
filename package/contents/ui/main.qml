@@ -67,7 +67,7 @@ PlasmoidItem {
         PlasmaCore.Action {
             text: i18n("Refresh")
             icon.name: "view-refresh"
-            onTriggered: root.fetchAll()
+            onTriggered: root.forceRefresh()
         },
         PlasmaCore.Action {
             text: i18n("Check for updates")
@@ -667,20 +667,35 @@ PlasmoidItem {
         onTriggered: root.fetchAll()
     }
 
-    // Recovery timer: while we have a token but haven't successfully fetched
-    // even once (e.g. system just booted, wifi still coming up, transient
-    // server hiccup), retry aggressively every 8 seconds. Auto-stops as soon
-    // as the first fetch lands. This fixes the "widget shows ... forever
-    // after suspend / system cleanup until I restart plasmashell" case —
-    // the normal 30s refresh interval is too long for cold boot.
+    // Recovery timer: retry aggressively every 8 seconds while we have a token
+    // but are NOT in a good state — either we've never fetched (cold boot, wifi
+    // still coming up) or we're currently showing an error (went Offline).
+    // Auto-stops as soon as a fetch succeeds. Uses forceRefresh() so a wedged
+    // pendingFetch can't block the retry. Fixes "widget stuck Offline after
+    // boot until I restart plasmashell" — the normal 30s interval is too slow.
     Timer {
         id: recoveryTimer
         interval: 8000
         repeat: true
-        running: root.apiKey.length > 0 && !root.hasFetchedOnce
+        running: root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError)
         onTriggered: {
-            console.log("[lzt] recovery-tick — not fetched yet, retrying")
-            root.fetchAll()
+            console.log("[lzt] recovery-tick — bad state, force-retrying")
+            root.forceRefresh()
+        }
+    }
+
+    // Watchdog: a hard backstop so pendingFetch can NEVER stay true forever.
+    // Armed by doFetchBatch, cleared by endFetch. If it ever fires it means a
+    // fetch's callbacks silently never ran (Qt XHR edge case), so we unwedge.
+    // 25s comfortably exceeds the 10s xhr timeout × 2 (primary + fallback).
+    Timer {
+        id: fetchWatchdog
+        interval: 25000
+        repeat: false
+        onTriggered: {
+            console.log("[lzt] watchdog fired — fetch wedged, force-resetting")
+            root.pendingFetch = false
+            if (!root.hasFetchedOnce) { root.statusText = "Offline"; root.hasError = true }
         }
     }
 
@@ -720,12 +735,12 @@ PlasmoidItem {
     Connections {
         target: Plasmoid.configuration
         function onApiKeyChanged() {
-            if (root.apiKey.length > 0) { root.hasFetchedOnce = false; root.fetchAll() }
+            if (root.apiKey.length > 0) { root.hasFetchedOnce = false; root.forceRefresh() }
             else { root.statusText = "No API Key"; root.hasError = true }
         }
         function onUpdateIntervalChanged() { refreshTimer.restart() }
         function onDisplayCurrencyChanged(){ root.recalcDisplay() }
-        function onApiServerChanged()      { root.fetchAll() }
+        function onApiServerChanged()      { root.forceRefresh() }
         function onCryptoListChanged()     { root.rebuildCryptoEntries() }
     }
 
@@ -758,6 +773,23 @@ PlasmoidItem {
         return Rates.formatRate(v) + sym
     }
 
+    // Single point that clears the in-flight flag AND stops the watchdog.
+    // Every code path that finishes a fetch must call this so pendingFetch
+    // can never get permanently stuck (which would wedge every later
+    // refresh, server change, and the recovery timer).
+    function endFetch() {
+        pendingFetch = false
+        fetchWatchdog.stop()
+    }
+
+    // User-initiated refresh. Unlike fetchAll(), it force-clears any stuck
+    // in-flight state first, so pressing Refresh / changing the API server
+    // ALWAYS triggers a real request even if a previous fetch wedged.
+    function forceRefresh() {
+        endFetch()
+        fetchAll()
+    }
+
     function fetchAll() {
         if (apiKey.length === 0) { statusText = "No API Key"; hasError = true; return }
         if (pendingFetch) return
@@ -766,6 +798,12 @@ PlasmoidItem {
 
     function doFetchBatch(server, canFallback) {
         pendingFetch = true
+        // (Re)arm the watchdog. If neither the DONE nor the timeout callback
+        // fires within this window — which Qt's XMLHttpRequest can do if the
+        // network stack was in a bad state when send() ran (e.g. right after
+        // boot, before wifi is up) — the watchdog force-resets pendingFetch.
+        fetchWatchdog.restart()
+
         var jobs = [
             { method: "GET", uri: server + "/currency", id: "1" },
             { method: "GET", uri: server + "/me",       id: "2" }
@@ -777,9 +815,9 @@ PlasmoidItem {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
                 parseBatchResponse(xhr.responseText)
-                pendingFetch = false
+                endFetch()
             } else if (xhr.status === 401) {
-                statusText = "Bad Token"; hasError = true; pendingFetch = false
+                statusText = "Bad Token"; hasError = true; endFetch()
             } else if (canFallback) {
                 doFetchBatch(fallbackServer, false)
             } else {
@@ -787,21 +825,35 @@ PlasmoidItem {
                 else if (xhr.status === 0)   statusText = "Offline"
                 else                         statusText = "Err " + xhr.status
                 if (!hasFetchedOnce) hasError = true
-                pendingFetch = false
+                endFetch()
             }
         }
         xhr.ontimeout = function() {
             if (canFallback) doFetchBatch(fallbackServer, false)
             else {
                 if (!hasFetchedOnce) { statusText = "Timeout"; hasError = true }
-                pendingFetch = false
+                endFetch()
             }
         }
-        xhr.open("POST", server + "/batch")
-        xhr.setRequestHeader("Content-Type", "application/json")
-        xhr.setRequestHeader("Accept",       "application/json")
-        xhr.setRequestHeader("Authorization","Bearer " + apiKey)
-        xhr.send(JSON.stringify(jobs))
+
+        // open()/send() can THROW synchronously when the network stack isn't
+        // ready (common at boot). Without this guard the throw would skip
+        // every callback and leave pendingFetch stuck true forever.
+        try {
+            xhr.open("POST", server + "/batch")
+            xhr.setRequestHeader("Content-Type", "application/json")
+            xhr.setRequestHeader("Accept",       "application/json")
+            xhr.setRequestHeader("Authorization","Bearer " + apiKey)
+            xhr.send(JSON.stringify(jobs))
+        } catch (e) {
+            console.log("[lzt] fetch send threw: " + e)
+            if (canFallback) {
+                doFetchBatch(fallbackServer, false)
+            } else {
+                if (!hasFetchedOnce) { statusText = "Offline"; hasError = true }
+                endFetch()
+            }
+        }
     }
 
     function parseBatchResponse(raw) {
