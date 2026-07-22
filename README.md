@@ -69,7 +69,7 @@ Right-click the widget → **Configure**:
 - **Sort by price** button orders coins by their USD price — first click expensive→cheap, next click cheap→expensive.
 - Coins appear in the panel after a separator: `1451₽ / 10₽ │ ₿ 73 595$  Ⓜ 387$`
 
-**Supported coins:** BTC · ETH · BNB · XMR · BCH · SOL · LTC · DASH · AVAX · TON · USDC · DAI · USDT · TRX · POL · MATIC · SHIB
+**Supported coins:** BTC · ETH · BNB · XMR · BCH · SOL · LTC · DASH · AVAX · GRAM · USDC · DAI · USDT · TRX · POL · MATIC · SHIB
 
 ## Usage
 

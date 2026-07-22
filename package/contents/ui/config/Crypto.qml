@@ -16,7 +16,7 @@ Item {
     // Coins that have BOTH an icon and a /currency rate.
     readonly property var supportedCoins: [
         "BTC","ETH","BNB","XMR","BCH","SOL","LTC","DASH",
-        "AVAX","TON","USDC","DAI","USDT","TRX","POL","MATIC","SHIB"
+        "AVAX","GRAM","USDC","DAI","USDT","TRX","POL","MATIC","SHIB"
     ]
     // Same shortlist as the balance display currency.
     readonly property var currencyModel: [
