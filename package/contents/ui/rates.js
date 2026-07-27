@@ -2,7 +2,64 @@
 // Importable by QML (import "rates.js" as Rates) and by Node tests
 // (the module.exports guard at the bottom — `module` is undefined in QML).
 
-// Coin price in a target currency. rates = code -> RUB-per-unit (from /currency).
+var COINGECKO_IDS = {
+    "BTC":   "bitcoin",
+    "ETH":   "ethereum",
+    "BNB":   "binancecoin",
+    "XMR":   "monero",
+    "BCH":   "bitcoin-cash",
+    "SOL":   "solana",
+    "LTC":   "litecoin",
+    "DASH":  "dash",
+    "AVAX":  "avalanche-2",
+    "GRAM":  "the-open-network",
+    "USDC":  "usd-coin",
+    "DAI":   "dai",
+    "USDT":  "tether",
+    "TRX":   "tron",
+    "POL":   "polygon-ecosystem-token",
+    "MATIC": "matic-network",
+    "SHIB":  "shiba-inu"
+}
+
+var COINGECKO_SUPPORTED_QUOTES = {
+    "RUB": true, "USD": true, "EUR": true, "UAH": true,
+    "BTC": true
+}
+
+function coingeckoId(code) {
+    return COINGECKO_IDS[code] || ""
+}
+
+function coingeckoSupportsQuote(currency) {
+    return COINGECKO_SUPPORTED_QUOTES[currency] === true
+}
+
+function uniquePush(arr, value) {
+    if (!value || arr.indexOf(value) !== -1) return
+    arr.push(value)
+}
+
+function coingeckoIdsForEntries(entries, includeBitcoin) {
+    var out = []
+    if (includeBitcoin) uniquePush(out, COINGECKO_IDS["BTC"])
+    for (var i = 0; entries && i < entries.length; i++) {
+        uniquePush(out, coingeckoId(entries[i].code))
+    }
+    return out
+}
+
+function coingeckoQuotesForEntries(entries, extraCurrency) {
+    var out = ["rub"]
+    if (coingeckoSupportsQuote(extraCurrency)) uniquePush(out, String(extraCurrency).toLowerCase())
+    for (var i = 0; entries && i < entries.length; i++) {
+        var c = entries[i].currency || "USD"
+        if (coingeckoSupportsQuote(c)) uniquePush(out, String(c).toLowerCase())
+    }
+    return out
+}
+
+// Coin price in a target currency. rates = code -> RUB-per-unit.
 // Returns null when either rate is missing or non-positive (caller shows a placeholder).
 function convert(rates, code, currency) {
     if (!rates) return null
@@ -51,5 +108,19 @@ function parseCryptoList(str) {
         return Array.isArray(arr) ? arr : []
     } catch (e) {
         return []
+    }
+}
+
+if (typeof module !== "undefined") {
+    module.exports = {
+        convert: convert,
+        trimZeros: trimZeros,
+        groupThousands: groupThousands,
+        formatRate: formatRate,
+        parseCryptoList: parseCryptoList,
+        coingeckoId: coingeckoId,
+        coingeckoSupportsQuote: coingeckoSupportsQuote,
+        coingeckoIdsForEntries: coingeckoIdsForEntries,
+        coingeckoQuotesForEntries: coingeckoQuotesForEntries
     }
 }

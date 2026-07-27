@@ -14,6 +14,7 @@ Kirigami.FormLayout {
     property alias  cfg_updateInterval: intervalSpinBox.value
     property alias  cfg_displayCurrency:currencyCombo.currentValue
     property alias  cfg_apiServer:      serverCombo.currentValue
+    property alias  cfg_cryptoProvider: providerCombo.currentValue
 
     function syncKeyField() { apiKeyField.text = Secret.decode(cfg_apiKey) }
     Component.onCompleted: syncKeyField()
@@ -73,9 +74,6 @@ Kirigami.FormLayout {
             { text: "USD  $",  value: "USD" },
             { text: "EUR  €",  value: "EUR" },
             { text: "UAH  ₴",  value: "UAH" },
-            { text: "GBP  £",  value: "GBP" },
-            { text: "BYN  Br", value: "BYN" },
-            { text: "KZT  ₸",  value: "KZT" },
             { text: "BTC  ₿",  value: "BTC" }
         ]
         textRole: "text"
@@ -83,6 +81,28 @@ Kirigami.FormLayout {
         Component.onCompleted: {
             for (var i = 0; i < model.length; i++) {
                 if (model[i].value === cfg_displayCurrency) { currentIndex = i; return }
+            }
+            currentIndex = 0
+        }
+    }
+
+    Kirigami.Separator {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label: i18n("Crypto")
+    }
+
+    QQC2.ComboBox {
+        id: providerCombo
+        Kirigami.FormData.label: i18n("Crypto provider:")
+        model: [
+            { text: "LZT Market", value: "lzt" },
+            { text: "CoinGecko",  value: "coingecko" }
+        ]
+        textRole: "text"
+        valueRole: "value"
+        Component.onCompleted: {
+            for (var i = 0; i < model.length; i++) {
+                if (model[i].value === cfg_cryptoProvider) { currentIndex = i; return }
             }
             currentIndex = 0
         }

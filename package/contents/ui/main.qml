@@ -44,12 +44,13 @@ PlasmoidItem {
     readonly property int    refreshMs:      (Plasmoid.configuration.updateInterval || 30) * 1000
     readonly property string displayCurrency:Plasmoid.configuration.displayCurrency || "RUB"
     readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://prod-api.lzt.market"
+    readonly property string cryptoProvider: Plasmoid.configuration.cryptoProvider || "lzt"
     readonly property string fallbackServer: primaryServer === "https://prod-api.lzt.market"
         ? "https://api.lzt.market" : "https://prod-api.lzt.market"
 
     readonly property var currencySymbols: ({
         "RUB": "₽", "USD": "$", "EUR": "€", "UAH": "₴",
-        "GBP": "£", "BYN": "Br", "KZT": "₸", "BTC": "₿"
+        "BTC": "₿"
     })
 
     // Parsed from Plasmoid.configuration.cryptoList; drives the panel Repeater.
@@ -668,7 +669,7 @@ PlasmoidItem {
     }
 
     // Recovery timer: retry aggressively every 8 seconds while we have a token
-    // but are NOT in a good state — either we've never fetched (cold boot, wifi
+    // but are NOT in a good state - either we've never fetched (cold boot, wifi
     // still coming up) or we're currently showing an error (went Offline).
     // Auto-stops as soon as a fetch succeeds. Uses forceRefresh() so a wedged
     // pendingFetch can't block the retry. Fixes "widget stuck Offline after
@@ -679,7 +680,7 @@ PlasmoidItem {
         repeat: true
         running: root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError)
         onTriggered: {
-            console.log("[lzt] recovery-tick — bad state, force-retrying")
+            console.log("[lzt] recovery-tick - bad state, force-retrying")
             root.forceRefresh()
         }
     }
@@ -687,13 +688,13 @@ PlasmoidItem {
     // Watchdog: a hard backstop so pendingFetch can NEVER stay true forever.
     // Armed by doFetchBatch, cleared by endFetch. If it ever fires it means a
     // fetch's callbacks silently never ran (Qt XHR edge case), so we unwedge.
-    // 25s comfortably exceeds the 10s xhr timeout × 2 (primary + fallback).
+    // 35s comfortably exceeds the 10s LZT timeout x 2 plus one CoinGecko try.
     Timer {
         id: fetchWatchdog
-        interval: 25000
+        interval: 35000
         repeat: false
         onTriggered: {
-            console.log("[lzt] watchdog fired — fetch wedged, force-resetting")
+            console.log("[lzt] watchdog fired - fetch wedged, force-resetting")
             root.pendingFetch = false
             if (!root.hasFetchedOnce) { root.statusText = "Offline"; root.hasError = true }
         }
@@ -709,6 +710,7 @@ PlasmoidItem {
 
         console.log("[lzt] init — stored.len=" + stored.length
                   + " decoded.len=" + apiKey.length
+                  + " crypto.provider=" + cryptoProvider
                   + " stored.prefix=" + (stored.length > 0 ? stored.substring(0, 4) : "<empty>"))
 
         // Drive the update checker from metadata (single source of truth).
@@ -741,7 +743,8 @@ PlasmoidItem {
         function onUpdateIntervalChanged() { refreshTimer.restart() }
         function onDisplayCurrencyChanged(){ root.recalcDisplay() }
         function onApiServerChanged()      { root.forceRefresh() }
-        function onCryptoListChanged()     { root.rebuildCryptoEntries() }
+        function onCryptoProviderChanged() { root.forceRefresh() }
+        function onCryptoListChanged()     { root.rebuildCryptoEntries(); root.forceRefresh() }
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -814,8 +817,9 @@ PlasmoidItem {
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
-                parseBatchResponse(xhr.responseText)
-                endFetch()
+                var needCrypto = parseBatchResponse(xhr.responseText)
+                if (needCrypto) fetchCoinGeckoRates()
+                else endFetch()
             } else if (xhr.status === 401) {
                 statusText = "Bad Token"; hasError = true; endFetch()
             } else if (canFallback) {
@@ -857,6 +861,7 @@ PlasmoidItem {
     }
 
     function parseBatchResponse(raw) {
+        var shouldFetchCoinGecko = false
         try {
             var data = JSON.parse(raw)
             if (!data || !data.jobs) throw new Error("no jobs")
@@ -870,6 +875,7 @@ PlasmoidItem {
                 for (var key in list)
                     if (list.hasOwnProperty(key) && list[key].rate > 0) rates[key] = list[key].rate
                 currencyRates = rates
+                shouldFetchCoinGecko = cryptoProvider === "coingecko" && cryptoEntries.length > 0
             }
 
             if (j2 && j2._job_result === "ok" && j2.user) {
@@ -899,6 +905,72 @@ PlasmoidItem {
             recalcDisplay()
         } catch (e) {
             if (!hasFetchedOnce) { statusText = "Parse Err"; hasError = true }
+        }
+        return shouldFetchCoinGecko
+    }
+
+    function fetchCoinGeckoRates() {
+        var ids = Rates.coingeckoIdsForEntries(cryptoEntries, displayCurrency !== "RUB")
+        var quotes = Rates.coingeckoQuotesForEntries(cryptoEntries, displayCurrency)
+        if (ids.length === 0) { endFetch(); return }
+
+        var url = "https://api.coingecko.com/api/v3/simple/price"
+            + "?ids=" + encodeURIComponent(ids.join(","))
+            + "&vs_currencies=" + encodeURIComponent(quotes.join(","))
+            + "&include_last_updated_at=true"
+
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            if (xhr.status === 200) {
+                parseCoinGeckoResponse(xhr.responseText)
+            } else {
+                console.log("[lzt] coingecko failed: " + xhr.status)
+            }
+            endFetch()
+        }
+        xhr.ontimeout = function() {
+            console.log("[lzt] coingecko timed out")
+            endFetch()
+        }
+
+        try {
+            xhr.open("GET", url)
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.send()
+        } catch (e) {
+            console.log("[lzt] coingecko send threw: " + e)
+            endFetch()
+        }
+    }
+
+    function parseCoinGeckoResponse(raw) {
+        try {
+            var data = JSON.parse(raw)
+            var merged = {}
+            for (var k in currencyRates)
+                if (currencyRates.hasOwnProperty(k)) merged[k] = currencyRates[k]
+
+            for (var i = 0; i < cryptoEntries.length; i++) {
+                var code = cryptoEntries[i].code
+                var id = Rates.coingeckoId(code)
+                if (id.length === 0 || !data[id] || !data[id].rub || data[id].rub <= 0) continue
+                merged[code] = data[id].rub
+            }
+
+            if (displayCurrency !== "RUB" && Rates.coingeckoSupportsQuote(displayCurrency)) {
+                var btc = data[Rates.coingeckoId("BTC")]
+                var quoteKey = String(displayCurrency).toLowerCase()
+                if (btc && btc.rub > 0 && btc[quoteKey] > 0) {
+                    merged[displayCurrency] = btc.rub / btc[quoteKey]
+                }
+            }
+
+            currencyRates = merged
+            recalcDisplay()
+        } catch (e) {
+            console.log("[lzt] coingecko parse failed: " + e)
         }
     }
 

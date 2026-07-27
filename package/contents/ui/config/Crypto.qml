@@ -3,6 +3,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
+import "../rates.js" as Rates
 import "../secret.js" as Secret
 
 Item {
@@ -24,9 +25,6 @@ Item {
         { text: "USD  $",  value: "USD" },
         { text: "EUR  €",  value: "EUR" },
         { text: "UAH  ₴",  value: "UAH" },
-        { text: "GBP  £",  value: "GBP" },
-        { text: "BYN  Br", value: "BYN" },
-        { text: "KZT  ₸",  value: "KZT" },
         { text: "BTC  ₿",  value: "BTC" }
     ]
 
@@ -79,9 +77,9 @@ Item {
     }
 
     // ── Sort by USD price ───────────────────────────────────────────
-    // The config page has no live rates, so the sort button fetches /currency
-    // once (using the token from the LZT tab) and orders coins by their price
-    // in USD. First click = expensive→cheap, next click = cheap→expensive.
+    // The config page has no live rates, so the sort button fetches one price
+    // snapshot from the selected crypto provider. First click = expensive->cheap,
+    // next click = cheap->expensive.
     property bool   sortDesc:     true
     property string sortStatus:   ""
     property bool   sortBusy:      false
@@ -111,13 +109,58 @@ Item {
     function requestSort() {
         if (sortCooldown) return            // silently swallow rapid clicks
         if (coinsModel.count < 2) return
-        var key = Secret.decode(cfgGet("apiKey", ""))
-        if (!key || key.length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
         sortCooldown = true
         sortCooldownTimer.restart()
-        var server = cfgGet("apiServer", "https://prod-api.lzt.market")
         setStatus(i18n("Sorting…"), true)
-        doFetchRates(String(server), key, true)
+
+        var provider = cfgGet("cryptoProvider", "lzt")
+        if (provider === "coingecko") {
+            doFetchCoinGeckoRates()
+        } else {
+            var key = Secret.decode(cfgGet("apiKey", ""))
+            if (!key || key.length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
+            var server = cfgGet("apiServer", "https://prod-api.lzt.market")
+            doFetchRates(String(server), key, true)
+        }
+    }
+
+    function doFetchCoinGeckoRates() {
+        var entries = []
+        for (var i = 0; i < coinsModel.count; i++) entries.push(coinsModel.get(i))
+        var ids = Rates.coingeckoIdsForEntries(entries, false)
+        if (ids.length === 0) { setStatus(i18n("Sort failed")); return }
+
+        var url = "https://api.coingecko.com/api/v3/simple/price"
+            + "?ids=" + encodeURIComponent(ids.join(","))
+            + "&vs_currencies=usd"
+            + "&include_last_updated_at=true"
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText)
+                    var rates = { "USD": 1 }
+                    for (var i = 0; i < coinsModel.count; i++) {
+                        var code = coinsModel.get(i).code
+                        var id = Rates.coingeckoId(code)
+                        if (id.length > 0 && data[id] && data[id].usd > 0) rates[code] = data[id].usd
+                    }
+                    applySort(rates)
+                    return
+                } catch (e) {}
+            }
+            setStatus(i18n("Sort failed"))
+        }
+        xhr.ontimeout = function() { setStatus(i18n("Sort timed out")) }
+        try {
+            xhr.open("GET", url)
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.send()
+        } catch (e) {
+            setStatus(i18n("Sort failed"))
+        }
     }
 
     function doFetchRates(server, key, canFallback) {

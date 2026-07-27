@@ -18,7 +18,7 @@
 
 - **Live balance + hold** in the panel: `1451₽ / 10₽`
 - **Crypto rates** next to your balance — add any of 17 coins, each shown in **its own currency**, sortable by price
-- **Currency conversion** by Lolzteam's own forum rates (RUB, USD, EUR, UAH, GBP, BYN, KZT, BTC)
+- **Currency conversion** by Lolzteam's own forum rates (RUB, USD, EUR, UAH, BTC)
 - **One-click money transfer** dialog — by **User ID** or **Username**, pick currency, optional comment
 - **One request, everything** — balance + all rates come from a single batched call every N seconds
 - **Resilient** — keeps showing the last known balance & rates if the API hiccups, and auto-falls back to the backup server

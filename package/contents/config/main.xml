@@ -18,6 +18,9 @@
         <entry name="apiServer" type="String">
             <default>https://prod-api.lzt.market</default>
         </entry>
+        <entry name="cryptoProvider" type="String">
+            <default>lzt</default>
+        </entry>
         <entry name="cryptoList" type="String">
             <default>[]</default>
         </entry>
