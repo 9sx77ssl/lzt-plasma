@@ -205,6 +205,7 @@ PlasmoidItem {
             Layout.alignment: Qt.AlignVCenter
 
             Image {
+                visible: root.showBalanceBlock
                 source: Qt.resolvedUrl("images/lolzteam.svg")
                 Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                 Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
@@ -984,11 +985,23 @@ PlasmoidItem {
             for (var k in currencyRates)
                 if (currencyRates.hasOwnProperty(k)) merged[k] = currencyRates[k]
 
+            var touched = false
+            var quotes = Rates.coingeckoQuotesForEntries(cryptoEntries, displayCurrency)
             for (var i = 0; i < cryptoEntries.length; i++) {
                 var code = cryptoEntries[i].code
                 var id = Rates.coingeckoId(code)
                 if (id.length === 0 || !data[id] || !data[id].rub || data[id].rub <= 0) continue
                 merged[code] = data[id].rub
+                touched = true
+
+                for (var q = 0; q < quotes.length; q++) {
+                    var quoteKey = quotes[q]
+                    var quoteCode = String(quoteKey).toUpperCase()
+                    if (quoteCode === "RUB") continue
+                    if (data[id][quoteKey] && data[id][quoteKey] > 0) {
+                        merged[quoteCode] = data[id].rub / data[id][quoteKey]
+                    }
+                }
             }
 
             if (displayCurrency !== "RUB" && Rates.coingeckoSupportsQuote(displayCurrency)) {
@@ -999,6 +1012,7 @@ PlasmoidItem {
                 }
             }
 
+            if (!touched && !hasCryptoFetchedOnce) throw new Error("no coingecko rates")
             currencyRates = merged
             hasCryptoFetchedOnce = true
             if (apiKey.length === 0) {
@@ -1008,6 +1022,10 @@ PlasmoidItem {
             recalcDisplay()
         } catch (e) {
             console.log("[lzt] coingecko parse failed: " + e)
+            if (!hasFetchedOnce && !hasCryptoFetchedOnce) {
+                statusText = "CG Parse"
+                hasError = true
+            }
         }
     }
 
