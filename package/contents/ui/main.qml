@@ -21,6 +21,7 @@ PlasmoidItem {
     property string statusText:       ""
     property bool   hasError:         false
     property bool   hasFetchedOnce:   false
+    property bool   hasCryptoFetchedOnce: false
     property bool   pendingFetch:     false
     property bool   pendingTransfer:  false
     property string transferStatus:   ""
@@ -55,6 +56,14 @@ PlasmoidItem {
 
     // Parsed from Plasmoid.configuration.cryptoList; drives the panel Repeater.
     property var cryptoEntries: []
+    readonly property bool canFetchCryptoWithoutToken: apiKey.length === 0
+        && cryptoProvider === "coingecko"
+        && cryptoEntries.length > 0
+        && !tokenStoredButEmpty
+    readonly property bool showBalanceBlock: apiKey.length > 0
+        || hasError
+        || cryptoProvider !== "coingecko"
+        || cryptoEntries.length === 0
 
     // Fixed crypto price color — a soft off-white (dimmer than pure white).
     readonly property color cryptoColor: "#D6D6D6"
@@ -205,6 +214,7 @@ PlasmoidItem {
             }
 
             Text {
+                visible: root.showBalanceBlock
                 text: {
                     if (root.hasError)        return root.statusText
                     if (!root.hasFetchedOnce) return "..."
@@ -217,7 +227,7 @@ PlasmoidItem {
             }
 
             Text {
-                visible: root.holdPositive && root.hasFetchedOnce && !root.hasError
+                visible: root.showBalanceBlock && root.holdPositive && root.hasFetchedOnce && !root.hasError
                 text: "/"
                 color: "#404040"
                 font.pixelSize: Kirigami.Theme.defaultFont.pixelSize + 1
@@ -225,7 +235,7 @@ PlasmoidItem {
             }
 
             Text {
-                visible: root.holdPositive && root.hasFetchedOnce && !root.hasError
+                visible: root.showBalanceBlock && root.holdPositive && root.hasFetchedOnce && !root.hasError
                 text: root.displayHold + root.displaySymbol
                 color: "#707070"
                 font.bold: true
@@ -235,7 +245,7 @@ PlasmoidItem {
 
             // ── Separator before crypto rates ───────────────────────
             Rectangle {
-                visible: root.cryptoEntries.length > 0
+                visible: root.cryptoEntries.length > 0 && root.showBalanceBlock
                 Layout.preferredWidth: 1
                 Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                 Layout.leftMargin: Kirigami.Units.smallSpacing
@@ -663,7 +673,7 @@ PlasmoidItem {
     Timer {
         id: refreshTimer
         interval: root.refreshMs
-        running:  root.apiKey.length > 0
+        running:  root.apiKey.length > 0 || root.canFetchCryptoWithoutToken
         repeat:   true
         onTriggered: root.fetchAll()
     }
@@ -678,7 +688,8 @@ PlasmoidItem {
         id: recoveryTimer
         interval: 8000
         repeat: true
-        running: root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError)
+        running: (root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError))
+            || (root.canFetchCryptoWithoutToken && (!root.hasCryptoFetchedOnce || root.hasError))
         onTriggered: {
             console.log("[lzt] recovery-tick - bad state, force-retrying")
             root.forceRefresh()
@@ -696,7 +707,7 @@ PlasmoidItem {
         onTriggered: {
             console.log("[lzt] watchdog fired - fetch wedged, force-resetting")
             root.pendingFetch = false
-            if (!root.hasFetchedOnce) { root.statusText = "Offline"; root.hasError = true }
+            if (!root.hasFetchedOnce && !root.hasCryptoFetchedOnce) { root.statusText = "Offline"; root.hasError = true }
         }
     }
 
@@ -729,6 +740,8 @@ PlasmoidItem {
             // Stored value isn't empty but decoded to "" — corrupt enc: blob.
             console.log("[lzt] stored token failed to decode — len=" + stored.length)
             statusText = "Decode Err"; hasError = true
+        } else if (canFetchCryptoWithoutToken) {
+            fetchAll()
         } else {
             statusText = "No API Key"; hasError = true
         }
@@ -738,6 +751,7 @@ PlasmoidItem {
         target: Plasmoid.configuration
         function onApiKeyChanged() {
             if (root.apiKey.length > 0) { root.hasFetchedOnce = false; root.forceRefresh() }
+            else if (root.canFetchCryptoWithoutToken) { root.hasFetchedOnce = false; root.forceRefresh() }
             else { root.statusText = "No API Key"; root.hasError = true }
         }
         function onUpdateIntervalChanged() { refreshTimer.restart() }
@@ -770,7 +784,7 @@ PlasmoidItem {
 
     // Display string for one crypto entry, e.g. "73328$".
     function cryptoText(entry) {
-        if (!hasFetchedOnce) return "…"
+        if (!hasCryptoFetchedOnce && !hasFetchedOnce) return "…"
         var v = Rates.convert(currencyRates, entry.code, entry.currency)
         var sym = currencySymbols[entry.currency] || entry.currency
         return Rates.formatRate(v) + sym
@@ -794,8 +808,20 @@ PlasmoidItem {
     }
 
     function fetchAll() {
-        if (apiKey.length === 0) { statusText = "No API Key"; hasError = true; return }
         if (pendingFetch) return
+        if (apiKey.length === 0) {
+            if (canFetchCryptoWithoutToken) {
+                pendingFetch = true
+                fetchWatchdog.restart()
+                hasError = false
+                statusText = ""
+                fetchCoinGeckoRates()
+            } else {
+                statusText = "No API Key"
+                hasError = true
+            }
+            return
+        }
         doFetchBatch(primaryServer, true)
     }
 
@@ -927,11 +953,16 @@ PlasmoidItem {
                 parseCoinGeckoResponse(xhr.responseText)
             } else {
                 console.log("[lzt] coingecko failed: " + xhr.status)
+                if (!hasFetchedOnce && !hasCryptoFetchedOnce) {
+                    statusText = xhr.status === 0 ? "Offline" : ("CG Err " + xhr.status)
+                    hasError = true
+                }
             }
             endFetch()
         }
         xhr.ontimeout = function() {
             console.log("[lzt] coingecko timed out")
+            if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Timeout"; hasError = true }
             endFetch()
         }
 
@@ -941,6 +972,7 @@ PlasmoidItem {
             xhr.send()
         } catch (e) {
             console.log("[lzt] coingecko send threw: " + e)
+            if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Offline"; hasError = true }
             endFetch()
         }
     }
@@ -968,6 +1000,11 @@ PlasmoidItem {
             }
 
             currencyRates = merged
+            hasCryptoFetchedOnce = true
+            if (apiKey.length === 0) {
+                hasError = false
+                statusText = ""
+            }
             recalcDisplay()
         } catch (e) {
             console.log("[lzt] coingecko parse failed: " + e)
