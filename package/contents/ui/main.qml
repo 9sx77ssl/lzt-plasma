@@ -29,6 +29,14 @@ PlasmoidItem {
 
     property var    currencyRates: ({})
 
+    // Track the single in-flight XHR and a generation counter so that stale
+    // callbacks from a previously aborted or superseded request are ignored.
+    // This prevents multiple overlapping requests from piling up when the
+    // network is slow or the API is unreachable, which can leak memory and
+    // eventually wedge or crash plasmashell.
+    property int    fetchGeneration: 0
+    property var    activeXhr: null
+
     property string transferAmount:         ""
     property string transferTargetCurrency: "RUB"
     property bool   transferUseId:          true
@@ -97,12 +105,12 @@ PlasmoidItem {
     // Using `Plasmoid.toolTipMainText:` triggers QML error
     //   "Cannot assign to non-existent property toolTipMainText"
     // because Applet has no such property. Always use these without prefix.
-    toolTipItem: Item {
-        implicitWidth: 0
-        implicitHeight: 0
-    }
-    toolTipMainText: " "
-    toolTipSubText: " "
+    //
+    // A 0x0 Item can confuse Plasma's tooltip sizing / positioning code and has
+    // been associated with instability in some Plasma 6 builds, so we leave the
+    // item undefined and just blank the texts.
+    toolTipMainText: ""
+    toolTipSubText: ""
 
     // ── Desktop notification for balance changes ────────────────
     // QML name is `Notification` (not `KNotification`) — the module exports
@@ -288,8 +296,6 @@ PlasmoidItem {
             }
         }
     }
-
-    fullRepresentation: Item {}
 
     // ────────────────────────────────────────────────────────────────
     // Transfer dialog
@@ -674,23 +680,23 @@ PlasmoidItem {
     Timer {
         id: refreshTimer
         interval: root.refreshMs
-        running:  root.apiKey.length > 0 || root.canFetchCryptoWithoutToken
+        // Do not pile up a new request while the previous one is still in
+        // flight. The timer will resume ticking once the current fetch ends.
+        running:  !root.pendingFetch && (root.apiKey.length > 0 || root.canFetchCryptoWithoutToken)
         repeat:   true
         onTriggered: root.fetchAll()
     }
 
-    // Recovery timer: retry aggressively every 8 seconds while we have a token
-    // but are NOT in a good state - either we've never fetched (cold boot, wifi
-    // still coming up) or we're currently showing an error (went Offline).
-    // Auto-stops as soon as a fetch succeeds. Uses forceRefresh() so a wedged
-    // pendingFetch can't block the retry. Fixes "widget stuck Offline after
-    // boot until I restart plasmashell" — the normal 30s interval is too slow.
+    // Recovery timer: retry while we have a token or crypto-only mode but are
+    // not in a good state. It pauses while a request is in flight, so it can't
+    // spawn overlapping XHRs. Auto-stops as soon as a fetch succeeds.
     Timer {
         id: recoveryTimer
         interval: 8000
         repeat: true
-        running: (root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError))
-            || (root.canFetchCryptoWithoutToken && (!root.hasCryptoFetchedOnce || root.hasError))
+        running: !root.pendingFetch && (
+            (root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError))
+            || (root.canFetchCryptoWithoutToken && (!root.hasCryptoFetchedOnce || root.hasError)))
         onTriggered: {
             console.log("[lzt] recovery-tick - bad state, force-retrying")
             root.forceRefresh()
@@ -698,16 +704,16 @@ PlasmoidItem {
     }
 
     // Watchdog: a hard backstop so pendingFetch can NEVER stay true forever.
-    // Armed by doFetchBatch, cleared by endFetch. If it ever fires it means a
-    // fetch's callbacks silently never ran (Qt XHR edge case), so we unwedge.
-    // 35s comfortably exceeds the 10s LZT timeout x 2 plus one CoinGecko try.
+    // Armed by startFetch, cleared by endFetch. If it ever fires it means a
+    // fetch's callbacks silently never ran (Qt XHR edge case), so we unwedge
+    // and mark the widget as offline. Aborts the active request as well.
     Timer {
         id: fetchWatchdog
         interval: 35000
         repeat: false
         onTriggered: {
             console.log("[lzt] watchdog fired - fetch wedged, force-resetting")
-            root.pendingFetch = false
+            root.endFetch()
             if (!root.hasFetchedOnce && !root.hasCryptoFetchedOnce) { root.statusText = "Offline"; root.hasError = true }
         }
     }
@@ -791,13 +797,34 @@ PlasmoidItem {
         return Rates.formatRate(v) + sym
     }
 
-    // Single point that clears the in-flight flag AND stops the watchdog.
-    // Every code path that finishes a fetch must call this so pendingFetch
-    // can never get permanently stuck (which would wedge every later
-    // refresh, server change, and the recovery timer).
+    // Start a new request: abort any previous in-flight request and become the
+    // current active XHR. The generation counter lets stale callbacks from an
+    // aborted request identify themselves and bail out.
+    function startFetch(xhr) {
+        fetchGeneration++
+        if (activeXhr) {
+            try { activeXhr.abort() } catch (e) {}
+        }
+        activeXhr = xhr
+        pendingFetch = true
+        fetchWatchdog.restart()
+    }
+
+    // Single point that clears the in-flight flag, stops the watchdog, and
+    // aborts the underlying request. Every code path that finishes a fetch must
+    // call this so pendingFetch can never get permanently stuck.
     function endFetch() {
+        var xhr = activeXhr
+        activeXhr = null
+        if (xhr) {
+            try { xhr.abort() } catch (e) {}
+        }
         pendingFetch = false
         fetchWatchdog.stop()
+    }
+
+    function isCurrentRequest(xhr) {
+        return xhr === activeXhr
     }
 
     // User-initiated refresh. Unlike fetchAll(), it force-clears any stuck
@@ -827,12 +854,7 @@ PlasmoidItem {
     }
 
     function doFetchBatch(server, canFallback) {
-        pendingFetch = true
-        // (Re)arm the watchdog. If neither the DONE nor the timeout callback
-        // fires within this window — which Qt's XMLHttpRequest can do if the
-        // network stack was in a bad state when send() ran (e.g. right after
-        // boot, before wifi is up) — the watchdog force-resets pendingFetch.
-        fetchWatchdog.restart()
+        if (pendingFetch) return
 
         var jobs = [
             { method: "GET", uri: server + "/currency", id: "1" },
@@ -840,8 +862,10 @@ PlasmoidItem {
         ]
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
+        startFetch(xhr)
 
         xhr.onreadystatechange = function() {
+            if (!isCurrentRequest(xhr)) return
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
                 var needCrypto = parseBatchResponse(xhr.responseText)
@@ -860,6 +884,7 @@ PlasmoidItem {
             }
         }
         xhr.ontimeout = function() {
+            if (!isCurrentRequest(xhr)) return
             if (canFallback) doFetchBatch(fallbackServer, false)
             else {
                 if (!hasFetchedOnce) { statusText = "Timeout"; hasError = true }
@@ -878,6 +903,7 @@ PlasmoidItem {
             xhr.send(JSON.stringify(jobs))
         } catch (e) {
             console.log("[lzt] fetch send threw: " + e)
+            if (!isCurrentRequest(xhr)) return
             if (canFallback) {
                 doFetchBatch(fallbackServer, false)
             } else {
@@ -948,7 +974,9 @@ PlasmoidItem {
 
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
+        startFetch(xhr)
         xhr.onreadystatechange = function() {
+            if (!isCurrentRequest(xhr)) return
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
                 parseCoinGeckoResponse(xhr.responseText)
@@ -962,6 +990,7 @@ PlasmoidItem {
             endFetch()
         }
         xhr.ontimeout = function() {
+            if (!isCurrentRequest(xhr)) return
             console.log("[lzt] coingecko timed out")
             if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Timeout"; hasError = true }
             endFetch()
@@ -973,6 +1002,7 @@ PlasmoidItem {
             xhr.send()
         } catch (e) {
             console.log("[lzt] coingecko send threw: " + e)
+            if (!isCurrentRequest(xhr)) return
             if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Offline"; hasError = true }
             endFetch()
         }
