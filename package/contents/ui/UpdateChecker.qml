@@ -10,6 +10,8 @@ Item {
 
     property string url: "https://raw.githubusercontent.com/9sx77ssl/lzt-plasma/main/package/metadata.json"
     property string currentVersion: ""
+    property bool   checking: false
+    property var    activeXhr: null
 
     Settings { id: store; category: "LztUpdateChecker"; property string lastCheck: "" }
 
@@ -22,12 +24,13 @@ Item {
         flags: Notification.CloseOnTimeout
     }
 
-    // Re-arms every 6h; the per-day guard inside check() does the real throttling.
+    // Re-arms every 6h once the checker is configured; the per-day guard
+    // inside check() does the real throttling. triggeredOnStart is false so
+    // we don't fire before currentVersion has been read from metadata.
     Timer {
         interval: 6 * 60 * 60 * 1000
-        running: true
+        running: checker.currentVersion.length > 0 && checker.url.length > 0
         repeat: true
-        triggeredOnStart: true
         onTriggered: checker.check(false)
     }
 
@@ -37,13 +40,23 @@ Item {
     }
 
     function check(force) {
+        if (checking) return
         if (!force && store.lastCheck === today()) return
         if (url.length === 0 || currentVersion.length === 0) return
 
+        if (activeXhr) {
+            try { activeXhr.abort() } catch (e) {}
+        }
+        checking = true
+
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
+        activeXhr = xhr
         xhr.onreadystatechange = function() {
+            if (xhr !== activeXhr) return
             if (xhr.readyState !== XMLHttpRequest.DONE) return
+            checking = false
+            activeXhr = null
             if (xhr.status !== 200) { if (force) notify(i18n("Update check failed")); return }
             store.lastCheck = today()
             try {
@@ -56,7 +69,18 @@ Item {
                 if (force) notify(i18n("Update check failed"))
             }
         }
-        xhr.ontimeout = function() { if (force) notify(i18n("Update check timed out")) }
+        xhr.ontimeout = function() {
+            if (xhr !== activeXhr) return
+            checking = false
+            activeXhr = null
+            if (force) notify(i18n("Update check timed out"))
+        }
+        xhr.onerror = function() {
+            if (xhr !== activeXhr) return
+            checking = false
+            activeXhr = null
+            if (force) notify(i18n("Update check failed"))
+        }
         xhr.open("GET", url)
         xhr.send()
     }

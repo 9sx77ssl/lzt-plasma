@@ -741,6 +741,7 @@ PlasmoidItem {
                 if (u && u.length) updateChecker.url = u
             }
         } catch (e) {}
+        updateChecker.check(false)
         rebuildCryptoEntries()
 
         if (apiKey.length > 0) {

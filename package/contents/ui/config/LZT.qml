@@ -11,11 +11,20 @@ KCM.SimpleKCM {
     // cfg_apiKey stores the OBFUSCATED token; the visible field shows the raw
     // one. We decode on load and encode on edit so plain text never persists.
     property string cfg_apiKey: ""
+    property string cfg_apiKeyDefault: ""
     property alias  cfg_updateInterval: intervalSpinBox.value
+    property int    cfg_updateIntervalDefault: 30
     property alias  cfg_displayCurrency:currencyCombo.currentValue
+    property string cfg_displayCurrencyDefault: "RUB"
     property alias  cfg_apiServer:      serverCombo.currentValue
+    property string cfg_apiServerDefault: "https://prod-api.lzt.market"
     property alias  cfg_cryptoProvider: providerCombo.currentValue
+    property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoList: "[]"
+    property string cfg_cryptoListDefault: "[]"
+    property bool   cfg_expanding: false
+    property int    cfg_length: 0
+    property string title: ""
 
     function syncKeyField() { apiKeyField.text = Secret.decode(cfg_apiKey) }
     Component.onCompleted: syncKeyField()
