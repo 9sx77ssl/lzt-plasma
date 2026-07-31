@@ -105,12 +105,12 @@ PlasmoidItem {
     // Using `Plasmoid.toolTipMainText:` triggers QML error
     //   "Cannot assign to non-existent property toolTipMainText"
     // because Applet has no such property. Always use these without prefix.
-    //
-    // A 0x0 Item can confuse Plasma's tooltip sizing / positioning code and has
-    // been associated with instability in some Plasma 6 builds, so we leave the
-    // item undefined and just blank the texts.
-    toolTipMainText: ""
-    toolTipSubText: ""
+    toolTipItem: Item {
+        implicitWidth: 0
+        implicitHeight: 0
+    }
+    toolTipMainText: " "
+    toolTipSubText: " "
 
     // ── Desktop notification for balance changes ────────────────
     // QML name is `Notification` (not `KNotification`) — the module exports
@@ -296,6 +296,8 @@ PlasmoidItem {
             }
         }
     }
+
+    fullRepresentation: Item {}
 
     // ────────────────────────────────────────────────────────────────
     // Transfer dialog

@@ -2,11 +2,11 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.kcmutils as KCM
 import "../secret.js" as Secret
 
-Kirigami.FormLayout {
+KCM.SimpleKCM {
     id: configPage
-    wideMode: true
 
     // cfg_apiKey stores the OBFUSCATED token; the visible field shows the raw
     // one. We decode on load and encode on edit so plain text never persists.
@@ -15,16 +15,20 @@ Kirigami.FormLayout {
     property alias  cfg_displayCurrency:currencyCombo.currentValue
     property alias  cfg_apiServer:      serverCombo.currentValue
     property alias  cfg_cryptoProvider: providerCombo.currentValue
+    property string cfg_cryptoList: "[]"
 
     function syncKeyField() { apiKeyField.text = Secret.decode(cfg_apiKey) }
     Component.onCompleted: syncKeyField()
     // Re-sync when the stored value arrives/changes, unless the user is typing.
     onCfg_apiKeyChanged: if (!apiKeyField.activeFocus) syncKeyField()
 
-    Kirigami.Separator {
-        Kirigami.FormData.isSection: true
-        Kirigami.FormData.label: i18n("Connection")
-    }
+    Kirigami.FormLayout {
+        anchors.fill: parent
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Connection")
+        }
 
     QQC2.TextField {
         id: apiKeyField
@@ -107,4 +111,5 @@ Kirigami.FormLayout {
             currentIndex = 0
         }
     }
+}
 }
