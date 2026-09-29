@@ -61,6 +61,13 @@ PlasmoidItem {
     readonly property string rawStoredKey:   Plasmoid.configuration.apiKey || ""
     readonly property string apiKey:         Secret.decode(rawStoredKey)
     readonly property bool   tokenStoredButEmpty: rawStoredKey.length > 0 && apiKey.length === 0
+
+    // Optional CoinGecko Demo API key (stored obfuscated like the LZT token).
+    // Keyless CoinGecko is IP-rate-limited and shared across everyone behind the
+    // same NAT, which is unreliable; a free Demo key raises the limit to
+    // 100 calls/min and is sent as the x-cg-demo-api-key header.
+    readonly property string rawStoredCgKey: Plasmoid.configuration.coingeckoApiKey || ""
+    readonly property string coingeckoApiKey: Secret.decode(rawStoredCgKey)
     readonly property int    refreshMs:      (Plasmoid.configuration.updateInterval || 30) * 1000
     readonly property string displayCurrency:Plasmoid.configuration.displayCurrency || "RUB"
     readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://prod-api.lzt.market"
@@ -741,10 +748,16 @@ PlasmoidItem {
             console.log("[lzt] migrating plain token to obfuscated form")
             Plasmoid.configuration.apiKey = Secret.encode(stored)
         }
+        var storedCg = Plasmoid.configuration.coingeckoApiKey || ""
+        if (Secret.isPlain(storedCg)) {
+            console.log("[lzt] migrating plain CoinGecko key to obfuscated form")
+            Plasmoid.configuration.coingeckoApiKey = Secret.encode(storedCg)
+        }
 
         console.log("[lzt] init — stored.len=" + stored.length
                   + " decoded.len=" + apiKey.length
                   + " crypto.provider=" + cryptoProvider
+                  + " cg.key=" + (coingeckoApiKey.length > 0)
                   + " stored.prefix=" + (stored.length > 0 ? stored.substring(0, 4) : "<empty>"))
 
         // Drive the update checker from metadata (single source of truth).
@@ -782,6 +795,7 @@ PlasmoidItem {
         function onDisplayCurrencyChanged(){ root.recalcDisplay() }
         function onApiServerChanged()      { root.forceRefresh() }
         function onCryptoProviderChanged() { root.forceRefresh() }
+        function onCoingeckoApiKeyChanged(){ root.resetRetry(); root.forceRefresh() }
         function onCryptoListChanged()     { root.rebuildCryptoEntries(); root.forceRefresh() }
     }
 
@@ -1080,6 +1094,8 @@ PlasmoidItem {
         try {
             xhr.open("GET", url)
             xhr.setRequestHeader("Accept", "application/json")
+            if (coingeckoApiKey.length > 0)
+                xhr.setRequestHeader("x-cg-demo-api-key", coingeckoApiKey)
             xhr.send()
         } catch (e) {
             console.log("[lzt] coingecko send threw: " + e)

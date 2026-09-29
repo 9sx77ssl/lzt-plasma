@@ -22,14 +22,15 @@ KCM.SimpleKCM {
     property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoList: "[]"
     property string cfg_cryptoListDefault: "[]"
-    property bool   cfg_expanding: false
-    property int    cfg_length: 0
-    property string title: ""
-
-    function syncKeyField() { apiKeyField.text = Secret.decode(cfg_apiKey) }
-    Component.onCompleted: syncKeyField()
+    // Optional CoinGecko Demo API key, stored obfuscated like the LZT token.
+    property string cfg_coingeckoApiKey: ""
+    property string cfg_coingeckoApiKeyDefault: ""
+    function syncKeyField()   { apiKeyField.text   = Secret.decode(cfg_apiKey) }
+    function syncCgKeyField() { cgApiKeyField.text = Secret.decode(cfg_coingeckoApiKey) }
+    Component.onCompleted: { syncKeyField(); syncCgKeyField() }
     // Re-sync when the stored value arrives/changes, unless the user is typing.
     onCfg_apiKeyChanged: if (!apiKeyField.activeFocus) syncKeyField()
+    onCfg_coingeckoApiKeyChanged: if (!cgApiKeyField.activeFocus) syncCgKeyField()
 
     Kirigami.FormLayout {
         anchors.fill: parent
@@ -119,6 +120,25 @@ KCM.SimpleKCM {
             }
             currentIndex = 0
         }
+    }
+
+    QQC2.TextField {
+        id: cgApiKeyField
+        Kirigami.FormData.label: i18n("CoinGecko API key:")
+        placeholderText: i18n("Free Demo key (optional but recommended)")
+        echoMode: TextInput.Password
+        Layout.fillWidth: true
+        visible: providerCombo.currentValue === "coingecko"
+        onTextEdited: configPage.cfg_coingeckoApiKey = Secret.encode(text)
+    }
+
+    QQC2.Label {
+        visible: providerCombo.currentValue === "coingecko"
+        text: i18n("Keyless CoinGecko is IP-rate-limited and shared with everyone on your IP. A free Demo key from coingecko.com gives 100 calls/min and is far more reliable.")
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
     }
 }
 }

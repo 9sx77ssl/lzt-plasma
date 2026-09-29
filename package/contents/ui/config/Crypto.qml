@@ -26,9 +26,8 @@ KCM.SimpleKCM {
     property string cfg_cryptoProvider: "lzt"
     property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoListDefault: "[]"
-    property bool   cfg_expanding: false
-    property int    cfg_length: 0
-    property string title: ""
+    property string cfg_coingeckoApiKey: ""
+    property string cfg_coingeckoApiKeyDefault: ""
 
 
     // Coins that have BOTH an icon and a /currency rate.
@@ -151,6 +150,7 @@ KCM.SimpleKCM {
             + "?ids=" + encodeURIComponent(ids.join(","))
             + "&vs_currencies=usd"
             + "&include_last_updated_at=true"
+        var cgKey = Secret.decode(cfgGet("coingeckoApiKey", ""))
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
         xhr.onreadystatechange = function() {
@@ -174,6 +174,8 @@ KCM.SimpleKCM {
         try {
             xhr.open("GET", url)
             xhr.setRequestHeader("Accept", "application/json")
+            if (cgKey && cgKey.length > 0)
+                xhr.setRequestHeader("x-cg-demo-api-key", cgKey)
             xhr.send()
         } catch (e) {
             setStatus(i18n("Sort failed"))

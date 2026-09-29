@@ -19,9 +19,8 @@ KCM.SimpleKCM {
     property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoList: "[]"
     property string cfg_cryptoListDefault: "[]"
-    property bool   cfg_expanding: false
-    property int    cfg_length: 0
-    property string title: ""
+    property string cfg_coingeckoApiKey: ""
+    property string cfg_coingeckoApiKeyDefault: ""
 
 
     Image {

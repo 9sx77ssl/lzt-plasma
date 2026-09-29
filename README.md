@@ -71,6 +71,10 @@ Right-click the widget → **Configure**:
 
 **Supported coins:** BTC · ETH · BNB · XMR · BCH · SOL · LTC · DASH · AVAX · GRAM · USDC · DAI · USDT · TRX · POL · MATIC · SHIB
 
+### CoinGecko
+
+Set **Crypto provider** to *CoinGecko* (LZT tab) to price coins with live CoinGecko data instead of LZT's own rates. CoinGecko's *keyless* API is rate-limited **per IP and shared with everyone on that IP**, so it often returns `403` / `429` on busy or shared connections. A **free Demo API key** ([coingecko.com/en/developers/dashboard](https://www.coingecko.com/en/developers/dashboard)) raises the limit to 100 calls/min — paste it into **CoinGecko API key** in the LZT tab (stored obfuscated, sent as `x-cg-demo-api-key`).
+
 ## Usage
 
 - **Left-click** → Transfer dialog
@@ -79,11 +83,11 @@ Right-click the widget → **Configure**:
 
 ## How it works
 
-Every refresh sends a single `POST /batch` with two jobs — `/currency` and `/me` — so the balance, hold, and all crypto rates arrive together. Crypto prices are computed locally from those rates (`coin ÷ currency`), so adding coins costs **zero** extra requests. If a refresh fails (offline, 5xx, timeout), the last good values stay on screen and the next tick retries on the backup server.
+Every refresh sends a single `POST /batch` with two jobs — `/currency` and `/me` — so the balance, hold, and all crypto rates arrive together. Crypto prices are computed locally from those rates (`coin ÷ currency`), so adding coins costs **zero** extra requests. If a refresh fails (offline, 5xx, timeout), the last good values stay on screen and the next tick retries on the backup server. When CoinGecko is the crypto provider it is queried separately in a single batched `simple/price` call. Failed fetches use **exponential backoff** (3s, 6s, 12s … capped at 5 min, with jitter) and honor the server's `Retry-After` header, so a rate-limited API is never hammered.
 
 ## Privacy & safety
 
-- Talks **only** to `*.lzt.market` over HTTPS — no telemetry, no third-party calls.
+- Talks to `*.lzt.market` over HTTPS. When CoinGecko is selected as the crypto provider it also talks to `api.coingecko.com`; otherwise no third-party calls are made. No telemetry.
 - The API token is stored **obfuscated** (not as plain text) in Plasma's per-user config (`~/.config/plasma-org.kde.plasma.desktop-appletsrc`) and sent only to the LZT API. Note: this is obfuscation, not encryption — a local widget must decode the token to use it, so the key lives in the code. It stops casual reading of the config file; for true at-rest security use a system keyring.
 - Transfers retry on the backup server **only** for infrastructure errors (5xx / timeout / network drop), never on errors that could mean the first attempt already went through — so no double-sends.
 

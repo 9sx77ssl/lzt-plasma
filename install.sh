@@ -126,15 +126,31 @@ install_plasmoid() {
 }
 
 restart_plasma() {
-    pgrep -x plasmashell >/dev/null 2>&1 || { say "plasmashell not running, skipping restart"; return 0; }
-    say "Restarting plasmashell"
-    if command -v kquitapp6 >/dev/null 2>&1 && command -v kstart >/dev/null 2>&1; then
-        run_quiet kquitapp6 plasmashell
-        sleep 1
-        ( setsid kstart plasmashell >/dev/null 2>&1 & ) || true
-    else
-        ( setsid plasmashell --replace >/dev/null 2>&1 & ) || true
+    if ! pgrep -x plasmashell >/dev/null 2>&1; then
+        say "plasmashell not running — starting it"
+        systemctl --user start plasma-plasmashell.service >/dev/null 2>&1 \
+            && ok "plasmashell started" || warn "could not start plasmashell"
+        return 0
     fi
+
+    say "Restarting plasmashell"
+    # Preferred: restart the systemd user unit so the shell comes back attached
+    # to the session. Killing it and relaunching via kstart/plain plasmashell
+    # leaves a bare process the session doesn't manage and can end up with no
+    # panel — use that only as a fallback.
+    if systemctl --user cat plasma-plasmashell.service >/dev/null 2>&1; then
+        run_quiet systemctl --user restart plasma-plasmashell.service \
+            && { ok "plasmashell restarted (systemd)"; return 0; }
+        warn "systemd restart failed, falling back"
+    fi
+
+    if command -v kquitapp6 >/dev/null 2>&1; then
+        run_quiet kquitapp6 plasmashell
+    else
+        pkill -x plasmashell >/dev/null 2>&1 || true
+    fi
+    sleep 1
+    ( setsid plasmashell --replace >/dev/null 2>&1 & ) || true
     ok "plasmashell restarted"
 }
 
