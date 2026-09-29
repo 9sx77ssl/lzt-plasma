@@ -268,6 +268,10 @@ KCM.SimpleKCM {
     // ── Layout: list on top, action toolbar underneath ──────────────
     ColumnLayout {
         anchors.fill: parent
+        // Leave room for the overlay scrollbar so the list/buttons don't run
+        // under it.
+        anchors.rightMargin: Kirigami.Units.largeSpacing
+        anchors.topMargin: Kirigami.Units.smallSpacing
         spacing: Kirigami.Units.smallSpacing
 
         Rectangle {

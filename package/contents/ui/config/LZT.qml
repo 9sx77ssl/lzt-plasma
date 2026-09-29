@@ -34,6 +34,9 @@ KCM.SimpleKCM {
 
     Kirigami.FormLayout {
         anchors.fill: parent
+        // Leave room for the overlay scrollbar so fields don't run under it.
+        anchors.rightMargin: Kirigami.Units.largeSpacing
+        anchors.topMargin: Kirigami.Units.smallSpacing
 
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
