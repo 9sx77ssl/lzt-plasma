@@ -21,8 +21,8 @@ KCM.SimpleKCM {
     property int    cfg_updateIntervalDefault: 30
     property string cfg_displayCurrency: "RUB"
     property string cfg_displayCurrencyDefault: "RUB"
-    property string cfg_apiServer: "https://api.lolz.team"
-    property string cfg_apiServerDefault: "https://api.lolz.team"
+    property string cfg_apiServer: "https://api.lzt.market"
+    property string cfg_apiServerDefault: "https://api.lzt.market"
     property string cfg_cryptoProvider: "lzt"
     property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoListDefault: "[]"
@@ -135,8 +135,8 @@ KCM.SimpleKCM {
         } else {
             var key = Secret.decode(cfgGet("apiKey", ""))
             if (!key || key.length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
-            var server = cfgGet("apiServer", "https://api.lolz.team")
-            doFetchRates(String(server), key, true)
+            var server = cfgGet("apiServer", "https://api.lzt.market")
+            doFetchRates(String(server), key, false)
         }
     }
 
@@ -183,8 +183,7 @@ KCM.SimpleKCM {
     }
 
     function doFetchRates(server, key, canFallback) {
-        var fallback = (String(server).indexOf("zelenka.guru") !== -1)
-            ? "https://api.lolz.team" : "https://api.zelenka.guru"
+        var fallback = "https://api.lzt.market"
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
         xhr.onreadystatechange = function() {

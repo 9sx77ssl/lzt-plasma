@@ -58,7 +58,7 @@ Right-click the widget → **Configure**:
 | Setting | What it does |
 |---|---|
 | **API Key** | Your LZT Bearer token — [lolz.live/account/api](https://lolz.live/account/api), `market` scope |
-| **API Server** | `api.lolz.team` by default; auto-falls back to `api.zelenka.guru` |
+| **API Server** | `api.lzt.market` |
 | **Refresh interval** | Seconds between updates (default 30) |
 | **Display currency** | Currency for the balance in the panel |
 
@@ -87,7 +87,7 @@ Every refresh sends a single `POST /batch` with two jobs — `/currency` and `/m
 
 ## Privacy & safety
 
-- Talks to `*.lolz.team` / `*.zelenka.guru` over HTTPS. When CoinGecko is selected as the crypto provider it also talks to `api.coingecko.com`; otherwise no third-party calls are made. No telemetry.
+- Talks to `api.lzt.market` over HTTPS. When CoinGecko is selected as the crypto provider it also talks to `api.coingecko.com`; otherwise no third-party calls are made. No telemetry.
 - The API token is stored **obfuscated** (not as plain text) in Plasma's per-user config (`~/.config/plasma-org.kde.plasma.desktop-appletsrc`) and sent only to the LZT API. Note: this is obfuscation, not encryption — a local widget must decode the token to use it, so the key lives in the code. It stops casual reading of the config file; for true at-rest security use a system keyring.
 - Transfers retry on the backup server **only** for infrastructure errors (5xx / timeout / network drop), never on errors that could mean the first attempt already went through — so no double-sends.
 

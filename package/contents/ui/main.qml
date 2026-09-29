@@ -70,10 +70,11 @@ PlasmoidItem {
     readonly property string coingeckoApiKey: Secret.decode(rawStoredCgKey)
     readonly property int    refreshMs:      (Plasmoid.configuration.updateInterval || 30) * 1000
     readonly property string displayCurrency:Plasmoid.configuration.displayCurrency || "RUB"
-    readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://api.lolz.team"
+    readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://api.lzt.market"
     readonly property string cryptoProvider: Plasmoid.configuration.cryptoProvider || "lzt"
-    readonly property string fallbackServer: primaryServer === "https://api.zelenka.guru"
-        ? "https://api.lolz.team" : "https://api.zelenka.guru"
+    // Single supported endpoint now; kept as a property so transfer/fetch code
+    // paths that expect a backup have somewhere to go.
+    readonly property string fallbackServer: primaryServer
 
     readonly property var currencySymbols: ({
         "RUB": "₽", "USD": "$", "EUR": "€", "UAH": "₴",
@@ -757,14 +758,12 @@ PlasmoidItem {
             Plasmoid.configuration.coingeckoApiKey = Secret.encode(storedCg)
         }
 
-        // lzt.market API servers are retired; move any stored value to the
-        // current lolz.team endpoint.
+        // Only api.lzt.market serves the /batch jobs we need; move any stored
+        // value (prod-api, lolz.team, zelenka.guru) to it.
         var storedServer = Plasmoid.configuration.apiServer || ""
-        if (storedServer === "https://prod-api.lzt.market"
-            || storedServer === "https://api.lzt.market"
-            || storedServer.length === 0) {
-            console.log("[lzt] migrating API server to https://api.lolz.team")
-            Plasmoid.configuration.apiServer = "https://api.lolz.team"
+        if (storedServer !== "https://api.lzt.market") {
+            console.log("[lzt] migrating API server to https://api.lzt.market")
+            Plasmoid.configuration.apiServer = "https://api.lzt.market"
         }
 
         console.log("[lzt] init — stored.len=" + stored.length
@@ -951,7 +950,7 @@ PlasmoidItem {
             }
             return
         }
-        doFetchBatch(primaryServer, true)
+        doFetchBatch(primaryServer, false)
     }
 
     function doFetchBatch(server, canFallback) {
@@ -1019,7 +1018,11 @@ PlasmoidItem {
     }
 
     function parseBatchResponse(raw) {
-        var shouldFetchCoinGecko = false
+        // Crypto (CoinGecko) is independent of the LZT jobs: fetch it whenever
+        // the provider is CoinGecko and coins are configured, even if /currency
+        // or /me came back with an error. Previously a single failed LZT job
+        // silently suppressed the crypto rates.
+        var shouldFetchCoinGecko = cryptoProvider === "coingecko" && cryptoEntries.length > 0
         try {
             var data = JSON.parse(raw)
             if (!data || !data.jobs) throw new Error("no jobs")
@@ -1033,7 +1036,6 @@ PlasmoidItem {
                 for (var key in list)
                     if (list.hasOwnProperty(key) && list[key].rate > 0) rates[key] = list[key].rate
                 currencyRates = rates
-                shouldFetchCoinGecko = cryptoProvider === "coingecko" && cryptoEntries.length > 0
             }
 
             if (j2 && j2._job_result === "ok" && j2.user) {
@@ -1155,8 +1157,10 @@ PlasmoidItem {
 
             if (!touched && !hasCryptoFetchedOnce) throw new Error("no coingecko rates")
             currencyRates = merged
+            var firstCrypto = !hasCryptoFetchedOnce
             hasCryptoFetchedOnce = true
             resetRetry()
+            if (firstCrypto) console.log("[lzt] coingecko ok — crypto rates loaded")
             if (apiKey.length === 0) {
                 hasError = false
                 statusText = ""
