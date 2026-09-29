@@ -17,7 +17,7 @@ KCM.SimpleKCM {
     property alias  cfg_displayCurrency:currencyCombo.currentValue
     property string cfg_displayCurrencyDefault: "RUB"
     property alias  cfg_apiServer:      serverCombo.currentValue
-    property string cfg_apiServerDefault: "https://prod-api.lzt.market"
+    property string cfg_apiServerDefault: "https://api.lolz.team"
     property alias  cfg_cryptoProvider: providerCombo.currentValue
     property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoList: "[]"
@@ -73,8 +73,8 @@ KCM.SimpleKCM {
         id: serverCombo
         Kirigami.FormData.label: i18n("API Server:")
         model: [
-            { text: "Production (prod-api)", value: "https://prod-api.lzt.market" },
-            { text: "Alternative (api)",     value: "https://api.lzt.market" }
+            { text: "Lolz (api.lolz.team)",        value: "https://api.lolz.team" },
+            { text: "Zelenka (api.zelenka.guru)",  value: "https://api.zelenka.guru" }
         ]
         textRole: "text"
         valueRole: "value"

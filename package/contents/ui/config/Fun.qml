@@ -13,8 +13,8 @@ KCM.SimpleKCM {
     property int    cfg_updateIntervalDefault: 30
     property string cfg_displayCurrency: "RUB"
     property string cfg_displayCurrencyDefault: "RUB"
-    property string cfg_apiServer: "https://prod-api.lzt.market"
-    property string cfg_apiServerDefault: "https://prod-api.lzt.market"
+    property string cfg_apiServer: "https://api.lolz.team"
+    property string cfg_apiServerDefault: "https://api.lolz.team"
     property string cfg_cryptoProvider: "lzt"
     property string cfg_cryptoProviderDefault: "lzt"
     property string cfg_cryptoList: "[]"

@@ -16,7 +16,7 @@
             <default>RUB</default>
         </entry>
         <entry name="apiServer" type="String">
-            <default>https://prod-api.lzt.market</default>
+            <default>https://api.lolz.team</default>
         </entry>
         <entry name="cryptoProvider" type="String">
             <default>lzt</default>

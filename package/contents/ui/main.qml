@@ -70,10 +70,10 @@ PlasmoidItem {
     readonly property string coingeckoApiKey: Secret.decode(rawStoredCgKey)
     readonly property int    refreshMs:      (Plasmoid.configuration.updateInterval || 30) * 1000
     readonly property string displayCurrency:Plasmoid.configuration.displayCurrency || "RUB"
-    readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://prod-api.lzt.market"
+    readonly property string primaryServer:  Plasmoid.configuration.apiServer || "https://api.lolz.team"
     readonly property string cryptoProvider: Plasmoid.configuration.cryptoProvider || "lzt"
-    readonly property string fallbackServer: primaryServer === "https://prod-api.lzt.market"
-        ? "https://api.lzt.market" : "https://prod-api.lzt.market"
+    readonly property string fallbackServer: primaryServer === "https://api.zelenka.guru"
+        ? "https://api.lolz.team" : "https://api.zelenka.guru"
 
     readonly property var currencySymbols: ({
         "RUB": "₽", "USD": "$", "EUR": "€", "UAH": "₴",
@@ -755,6 +755,16 @@ PlasmoidItem {
         if (Secret.isPlain(storedCg)) {
             console.log("[lzt] migrating plain CoinGecko key to obfuscated form")
             Plasmoid.configuration.coingeckoApiKey = Secret.encode(storedCg)
+        }
+
+        // lzt.market API servers are retired; move any stored value to the
+        // current lolz.team endpoint.
+        var storedServer = Plasmoid.configuration.apiServer || ""
+        if (storedServer === "https://prod-api.lzt.market"
+            || storedServer === "https://api.lzt.market"
+            || storedServer.length === 0) {
+            console.log("[lzt] migrating API server to https://api.lolz.team")
+            Plasmoid.configuration.apiServer = "https://api.lolz.team"
         }
 
         console.log("[lzt] init — stored.len=" + stored.length
