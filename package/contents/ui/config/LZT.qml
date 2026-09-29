@@ -164,15 +164,5 @@ KCM.SimpleKCM {
                                                         : TextInput.Password
         }
     }
-
-    QQC2.Label {
-        visible: providerCombo.currentValue === "coingecko"
-        text: i18n("Keyless CoinGecko is rate-limited per IP. A free Demo key (coingecko.com) allows 100 calls/min.")
-        wrapMode: Text.WordWrap
-        Layout.fillWidth: true
-        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
-        font: Kirigami.Theme.smallFont
-        opacity: 0.7
-    }
 }
 }

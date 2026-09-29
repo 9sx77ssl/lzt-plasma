@@ -738,6 +738,9 @@ PlasmoidItem {
             console.log("[lzt] watchdog fired - fetch wedged, force-resetting")
             root.endFetch()
             if (!root.hasFetchedOnce && !root.hasCryptoFetchedOnce) { root.statusText = "Offline"; root.hasError = true }
+            // Treat a wedged request like any other failure so we back off
+            // instead of leaning on refreshTimer to fire again immediately.
+            root.noteFailure(0, 0)
         }
     }
 
