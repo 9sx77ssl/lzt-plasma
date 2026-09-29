@@ -37,6 +37,17 @@ PlasmoidItem {
     property int    fetchGeneration: 0
     property var    activeXhr: null
 
+    // Retry/backoff state. On a failed fetch we schedule ONE retry after an
+    // exponentially growing delay (with jitter), and honor the server's
+    // Retry-After header when present (needed for HTTP 429). This replaces the
+    // old fixed 8s "recovery" loop that hammered the API every 8 seconds and
+    // got the IP rate-limited (429) / blocked (403).
+    property int    failureStreak:  0
+    property bool   retryScheduled: false
+    property int    retryDelayMs:   0
+    readonly property int retryBaseMs:     3000
+    readonly property int maxRetryDelayMs: 5 * 60 * 1000
+
     property string transferAmount:         ""
     property string transferTargetCurrency: "RUB"
     property bool   transferUseId:          true
@@ -683,24 +694,27 @@ PlasmoidItem {
         id: refreshTimer
         interval: root.refreshMs
         // Do not pile up a new request while the previous one is still in
-        // flight. The timer will resume ticking once the current fetch ends.
-        running:  !root.pendingFetch && (root.apiKey.length > 0 || root.canFetchCryptoWithoutToken)
+        // flight, and stay quiet while a backoff retry is scheduled so the
+        // periodic timer can't defeat the backoff by firing every N seconds.
+        running:  !root.pendingFetch && !root.retryScheduled
+                  && (root.apiKey.length > 0 || root.canFetchCryptoWithoutToken)
         repeat:   true
         onTriggered: root.fetchAll()
     }
 
-    // Recovery timer: retry while we have a token or crypto-only mode but are
-    // not in a good state. It pauses while a request is in flight, so it can't
-    // spawn overlapping XHRs. Auto-stops as soon as a fetch succeeds.
+    // Backoff retry timer. Armed by noteFailure() with an exponentially growing
+    // interval (or the server's Retry-After), disarmed by resetRetry() on the
+    // first success. Because refreshTimer pauses while retryScheduled is true,
+    // the longest of the two schedules wins — so a rate-limited API is never
+    // hammered.
     Timer {
         id: recoveryTimer
-        interval: 8000
+        interval: root.retryDelayMs > 0 ? root.retryDelayMs : 1000
         repeat: true
-        running: !root.pendingFetch && (
-            (root.apiKey.length > 0 && (!root.hasFetchedOnce || root.hasError))
-            || (root.canFetchCryptoWithoutToken && (!root.hasCryptoFetchedOnce || root.hasError)))
+        running: root.retryScheduled && !root.pendingFetch
         onTriggered: {
-            console.log("[lzt] recovery-tick - bad state, force-retrying")
+            console.log("[lzt] retry #" + root.failureStreak
+                        + " after " + root.retryDelayMs + "ms")
             root.forceRefresh()
         }
     }
@@ -830,6 +844,63 @@ PlasmoidItem {
         return xhr === activeXhr
     }
 
+    // Read the server-requested cooldown from a Retry-After header (seconds).
+    // Returns 0 when absent/unparseable. Qt exposes response headers even for
+    // non-2xx replies, which is exactly what we need for 429/503.
+    function retryAfterSeconds(xhr) {
+        try {
+            var v = xhr.getResponseHeader("Retry-After")
+            if (v) {
+                var n = parseInt(v, 10)
+                if (!isNaN(n) && n > 0) return n
+            }
+        } catch (e) {}
+        return 0
+    }
+
+    // A fetch attempt failed. Arm a single backoff retry: exponential from
+    // retryBaseMs (3s, 6s, 12s, …) capped at maxRetryDelayMs (5 min), with
+    // ±20% jitter, unless the server sent Retry-After — then respect that.
+    // 401/403 with no Retry-After still backs off, but a bad token (401) is
+    // permanent, so we don't schedule a retry at all in that case.
+    function noteFailure(status, retryAfterSec) {
+        // A bad token will never fix itself by retrying — wait for the user.
+        if (status === 401) {
+            resetRetry()
+            return
+        }
+
+        failureStreak++
+
+        var delay = 0
+        if (retryAfterSec && retryAfterSec > 0)
+            delay = retryAfterSec * 1000
+        else {
+            var exp = Math.min(failureStreak - 1, 10)
+            delay = retryBaseMs * Math.pow(2, exp)
+        }
+        delay = Math.min(delay, maxRetryDelayMs)
+
+        // ±20% jitter so many clients don't retry in lockstep.
+        var jitter = Math.round(delay * 0.2)
+        delay = delay - jitter + Math.round(Math.random() * jitter * 2)
+        delay = Math.max(1000, delay)
+
+        retryDelayMs = delay
+        retryScheduled = true
+        console.log("[lzt] fetch failed (" + status + "), retry #"
+                    + failureStreak + " in " + retryDelayMs + "ms"
+                    + (retryAfterSec > 0 ? " (Retry-After " + retryAfterSec + "s)" : ""))
+    }
+
+    // A fetch succeeded — clear the backoff so the normal refresh cadence and
+    // the retry timer both stand down.
+    function resetRetry() {
+        failureStreak = 0
+        retryScheduled = false
+        retryDelayMs    = 0
+    }
+
     // User-initiated refresh. Unlike fetchAll(), it force-clears any stuck
     // in-flight state first, so pressing Refresh / changing the API server
     // ALWAYS triggers a real request even if a previous fetch wedged.
@@ -871,11 +942,12 @@ PlasmoidItem {
             if (!isCurrentRequest(xhr)) return
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
+                resetRetry()
                 var needCrypto = parseBatchResponse(xhr.responseText)
                 if (needCrypto) fetchCoinGeckoRates()
                 else endFetch()
             } else if (xhr.status === 401) {
-                statusText = "Bad Token"; hasError = true; endFetch()
+                statusText = "Bad Token"; hasError = true; resetRetry(); endFetch()
             } else if (canFallback) {
                 doFetchBatch(fallbackServer, false)
             } else {
@@ -883,6 +955,7 @@ PlasmoidItem {
                 else if (xhr.status === 0)   statusText = "Offline"
                 else                         statusText = "Err " + xhr.status
                 if (!hasFetchedOnce) hasError = true
+                noteFailure(xhr.status, retryAfterSeconds(xhr))
                 endFetch()
             }
         }
@@ -891,6 +964,7 @@ PlasmoidItem {
             if (canFallback) doFetchBatch(fallbackServer, false)
             else {
                 if (!hasFetchedOnce) { statusText = "Timeout"; hasError = true }
+                noteFailure(0, 0)
                 endFetch()
             }
         }
@@ -911,6 +985,7 @@ PlasmoidItem {
                 doFetchBatch(fallbackServer, false)
             } else {
                 if (!hasFetchedOnce) { statusText = "Offline"; hasError = true }
+                noteFailure(0, 0)
                 endFetch()
             }
         }
@@ -961,6 +1036,7 @@ PlasmoidItem {
             recalcDisplay()
         } catch (e) {
             if (!hasFetchedOnce) { statusText = "Parse Err"; hasError = true }
+            noteFailure(0, 0)
         }
         return shouldFetchCoinGecko
     }
@@ -989,6 +1065,7 @@ PlasmoidItem {
                     statusText = xhr.status === 0 ? "Offline" : ("CG Err " + xhr.status)
                     hasError = true
                 }
+                noteFailure(xhr.status, retryAfterSeconds(xhr))
             }
             endFetch()
         }
@@ -996,6 +1073,7 @@ PlasmoidItem {
             if (!isCurrentRequest(xhr)) return
             console.log("[lzt] coingecko timed out")
             if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Timeout"; hasError = true }
+            noteFailure(0, 0)
             endFetch()
         }
 
@@ -1007,6 +1085,7 @@ PlasmoidItem {
             console.log("[lzt] coingecko send threw: " + e)
             if (!isCurrentRequest(xhr)) return
             if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Offline"; hasError = true }
+            noteFailure(0, 0)
             endFetch()
         }
     }
@@ -1048,6 +1127,7 @@ PlasmoidItem {
             if (!touched && !hasCryptoFetchedOnce) throw new Error("no coingecko rates")
             currencyRates = merged
             hasCryptoFetchedOnce = true
+            resetRetry()
             if (apiKey.length === 0) {
                 hasError = false
                 statusText = ""
@@ -1059,6 +1139,7 @@ PlasmoidItem {
                 statusText = "CG Parse"
                 hasError = true
             }
+            noteFailure(0, 0)
         }
     }
 
