@@ -33,23 +33,40 @@ KCM.SimpleKCM {
     onCfg_coingeckoApiKeyChanged: if (!cgApiKeyField.activeFocus) syncCgKeyField()
 
     Kirigami.FormLayout {
-        anchors.fill: parent
-        // Leave room for the overlay scrollbar so fields don't run under it.
-        anchors.rightMargin: Kirigami.Units.largeSpacing
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.leftMargin: Kirigami.Units.smallSpacing
         anchors.topMargin: Kirigami.Units.smallSpacing
+        // Keep the form compact (and clear of the overlay scrollbar) instead of
+        // stretching inputs across the whole dialog.
+        width: Math.min(parent.width - Kirigami.Units.largeSpacing * 2,
+                        Kirigami.Units.gridUnit * 26)
 
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
             Kirigami.FormData.label: i18n("Connection")
         }
 
-    QQC2.TextField {
-        id: apiKeyField
-        Kirigami.FormData.label: i18n("API Key:")
-        placeholderText: "LZT Bearer token"
-        echoMode: TextInput.Password
+    RowLayout {
         Layout.fillWidth: true
-        onTextEdited: configPage.cfg_apiKey = Secret.encode(text)
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+        Kirigami.FormData.label: i18n("API Key:")
+        QQC2.TextField {
+            id: apiKeyField
+            Layout.fillWidth: true
+            placeholderText: "LZT Bearer token"
+            echoMode: TextInput.Password
+            onTextEdited: configPage.cfg_apiKey = Secret.encode(text)
+        }
+        QQC2.ToolButton {
+            icon.name: apiKeyField.echoMode === TextInput.Password
+                       ? "password-show-on" : "password-show-off"
+            checkable: true
+            QQC2.ToolTip.text: i18n("Show / hide")
+            QQC2.ToolTip.visible: hovered
+            onClicked: apiKeyField.echoMode = checked ? TextInput.Normal
+                                                      : TextInput.Password
+        }
     }
 
     QQC2.ComboBox {
@@ -125,21 +142,35 @@ KCM.SimpleKCM {
         }
     }
 
-    QQC2.TextField {
-        id: cgApiKeyField
-        Kirigami.FormData.label: i18n("CoinGecko API key:")
-        placeholderText: i18n("Free Demo key (optional but recommended)")
-        echoMode: TextInput.Password
+    RowLayout {
         Layout.fillWidth: true
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+        Kirigami.FormData.label: i18n("CoinGecko API key:")
         visible: providerCombo.currentValue === "coingecko"
-        onTextEdited: configPage.cfg_coingeckoApiKey = Secret.encode(text)
+        QQC2.TextField {
+            id: cgApiKeyField
+            Layout.fillWidth: true
+            placeholderText: i18n("Free Demo key (optional)")
+            echoMode: TextInput.Password
+            onTextEdited: configPage.cfg_coingeckoApiKey = Secret.encode(text)
+        }
+        QQC2.ToolButton {
+            icon.name: cgApiKeyField.echoMode === TextInput.Password
+                       ? "password-show-on" : "password-show-off"
+            checkable: true
+            QQC2.ToolTip.text: i18n("Show / hide")
+            QQC2.ToolTip.visible: hovered
+            onClicked: cgApiKeyField.echoMode = checked ? TextInput.Normal
+                                                        : TextInput.Password
+        }
     }
 
     QQC2.Label {
         visible: providerCombo.currentValue === "coingecko"
-        text: i18n("Keyless CoinGecko is IP-rate-limited and shared with everyone on your IP. A free Demo key from coingecko.com gives 100 calls/min and is far more reliable.")
+        text: i18n("Keyless CoinGecko is rate-limited per IP. A free Demo key (coingecko.com) allows 100 calls/min.")
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
         font: Kirigami.Theme.smallFont
         opacity: 0.7
     }
