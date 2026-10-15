@@ -18,10 +18,11 @@
 
 - **Live balance + hold** in the panel: `1451₽ / 10₽`
 - **Crypto rates** next to your balance — add any of 17 coins, each shown in **its own currency**, sortable by price
+- **Five crypto providers** — LZT itself, CoinGecko, Binance, Kraken and Coinbase (the last three need **no key**)
 - **Currency conversion** by Lolzteam's own forum rates (RUB, USD, EUR, UAH, BTC)
 - **One-click money transfer** dialog — by **User ID** or **Username**, pick currency, optional comment
-- **One request, everything** — balance + all rates come from a single batched call every N seconds
-- **Resilient** — keeps showing the last known balance & rates if the API hiccups, and auto-falls back to the backup server
+- **Fast & gentle** — balance + rates arrive via two parallel `GET`s (no `/batch` POST), every N seconds
+- **Resilient** — keeps showing the last known balance & rates if the API hiccups, backing off exponentially
 - **Desktop notifications** on balance changes
 - **Native Plasma 6** look, themed in LZT green `#2BAD72`
 
@@ -71,6 +72,18 @@ Right-click the widget → **Configure**:
 
 **Supported coins:** BTC · ETH · BNB · XMR · BCH · SOL · LTC · DASH · AVAX · GRAM · USDC · DAI · USDT · TRX · POL · MATIC · SHIB
 
+### Crypto providers
+
+| Provider | Key needed | Coins covered |
+|---|---|---|
+| **LZT Market** | LZT token | all 17 |
+| **CoinGecko** | free Demo key recommended | all 17 |
+| **Binance** | none | all except XMR & DAI |
+| **Kraken** | none | all except MATIC |
+| **Coinbase** | none | all except XMR & TRX |
+
+Coins a provider doesn't list are simply **hidden in the panel** while that provider is selected (the icon set is fixed, so the widget never invents new coins); the CRYPTO tab dims them with a *"not on …"* hint. Binance and Kraken are priced in USD/USDT and converted with LZT's own RUB/EUR/UAH rates — or, when there's no LZT token, a free keyless `open.er-api.com` snapshot.
+
 ### CoinGecko
 
 Set **Crypto provider** to *CoinGecko* (LZT tab) to price coins with live CoinGecko data instead of LZT's own rates. CoinGecko's *keyless* API is rate-limited **per IP and shared with everyone on that IP**, so it often returns `403` / `429` on busy or shared connections. A **free Demo API key** ([coingecko.com/en/developers/dashboard](https://www.coingecko.com/en/developers/dashboard)) raises the limit to 100 calls/min — paste it into **CoinGecko API key** in the LZT tab (stored obfuscated, sent as `x-cg-demo-api-key`).
@@ -83,11 +96,12 @@ Set **Crypto provider** to *CoinGecko* (LZT tab) to price coins with live CoinGe
 
 ## How it works
 
-Every refresh sends a single `POST /batch` with two jobs — `/currency` and `/me` — so the balance, hold, and all crypto rates arrive together. Crypto prices are computed locally from those rates (`coin ÷ currency`), so adding coins costs **zero** extra requests. If a refresh fails (offline, 5xx, timeout), the last good values stay on screen and the next tick retries on the backup server. When CoinGecko is the crypto provider it is queried separately in a single batched `simple/price` call. Failed fetches use **exponential backoff** (3s, 6s, 12s … capped at 5 min, with jitter) and honor the server's `Retry-After` header, so a rate-limited API is never hammered.
+Every refresh fires two **independent `GET`s in parallel** — `/currency` and `/me` — instead of one `POST /batch`. That's cheaper (a batch fans out to three upstream calls and the POST is capped at 30/min) and far less likely to be rate-limited. The balance, hold and all crypto rates then arrive together, and crypto prices are computed locally from those rates (`coin ÷ currency`), so adding coins costs **zero** extra requests. When the crypto provider isn't *LZT*, one extra request pulls the coin prices (CoinGecko / Binance / Kraken / Coinbase; Binance & Kraken also fetch a free fiat anchor when needed). Failed fetches use **exponential backoff** (3s, 6s, 12s … capped at 5 min, with jitter) and honor the server's `Retry-After` header, so a rate-limited API is never hammered.
 
 ## Privacy & safety
 
-- Talks to `api.lzt.market` over HTTPS. When CoinGecko is selected as the crypto provider it also talks to `api.coingecko.com`; otherwise no third-party calls are made. No telemetry.
+- Talks to `api.lzt.market` over HTTPS. Depending on the crypto provider it may also query `api.coingecko.com`, `api.binance.com`, `api.kraken.com`, `api.coinbase.com`, and (only when there's no LZT token) `open.er-api.com` for fiat anchors. No telemetry.
+- Transfers go **only** to `api.lzt.market`. They retry on network/5xx errors only, never on errors that could mean the first attempt already went through — so no double-sends.
 - The API token is stored **obfuscated** (not as plain text) in Plasma's per-user config (`~/.config/plasma-org.kde.plasma.desktop-appletsrc`) and sent only to the LZT API. Note: this is obfuscation, not encryption — a local widget must decode the token to use it, so the key lives in the code. It stops casual reading of the config file; for true at-rest security use a system keyring.
 - Transfers retry on the backup server **only** for infrastructure errors (5xx / timeout / network drop), never on errors that could mean the first attempt already went through — so no double-sends.
 

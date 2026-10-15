@@ -92,6 +92,14 @@ KCM.SimpleKCM {
         return value
     }
 
+    function providerLabel(value) {
+        var names = {
+            "lzt": "LZT", "coingecko": "CoinGecko",
+            "binance": "Binance", "kraken": "Kraken", "coinbase": "Coinbase"
+        }
+        return names[value] || value
+    }
+
     // ── Sort by USD price ───────────────────────────────────────────
     // The config page has no live rates, so the sort button fetches one price
     // snapshot from the selected crypto provider. First click = expensive->cheap,
@@ -132,12 +140,74 @@ KCM.SimpleKCM {
         var provider = cfgGet("cryptoProvider", "lzt")
         if (provider === "coingecko") {
             doFetchCoinGeckoRates()
+        } else if (provider === "binance" || provider === "kraken") {
+            doFetchUsdProvider(provider)
+        } else if (provider === "coinbase") {
+            doFetchCoinbase()
         } else {
             var key = Secret.decode(cfgGet("apiKey", ""))
             if (!key || key.length === 0) { setStatus(i18n("Add API key in the LZT tab to sort")); return }
             var server = cfgGet("apiServer", "https://api.lzt.market")
-            doFetchRates(String(server), key, false)
+            doFetchRates(String(server), key)
         }
+    }
+
+    // USD prices for Binance/Kraken -> applySort (which divides by rates.USD).
+    function doFetchUsdProvider(provider) {
+        var entries = []
+        for (var i = 0; i < coinsModel.count; i++) entries.push(coinsModel.get(i))
+        var map = (provider === "binance") ? Rates.BINANCE_PAIRS : Rates.KRAKEN_PAIRS
+        var syms = Rates.providerSymbolsForEntries(map, entries)
+        if (syms.length === 0) { setStatus(i18n("Sort failed")); return }
+        var url = (provider === "binance")
+            ? "https://api.binance.com/api/v3/ticker/price?symbols=" + encodeURIComponent(JSON.stringify(syms))
+            : "https://api.kraken.com/0/public/Ticker?pair=" + syms.join(",")
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            if (xhr.status === 200) {
+                try {
+                    var px = (provider === "binance") ? Rates.parseBinancePrices(xhr.responseText)
+                                                      : Rates.parseKrakenPrices(xhr.responseText)
+                    var rates = { "USD": 1 }
+                    for (var c in px) if (px.hasOwnProperty(c) && px[c] > 0) rates[c] = px[c]
+                    applySort(rates)
+                    return
+                } catch (e) {}
+            }
+            setStatus(i18n("Sort failed"))
+        }
+        xhr.ontimeout = function() { setStatus(i18n("Sort timed out")) }
+        try {
+            xhr.open("GET", url)
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.send()
+        } catch (e) { setStatus(i18n("Sort failed")) }
+    }
+
+    function doFetchCoinbase() {
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            if (xhr.status === 200) {
+                try {
+                    var d = Rates.parseCoinbaseRates(xhr.responseText)
+                    var rates = { "USD": 1 }
+                    for (var c in d.coins) if (d.coins.hasOwnProperty(c) && d.coins[c] > 0) rates[c] = d.coins[c]
+                    applySort(rates)
+                    return
+                } catch (e) {}
+            }
+            setStatus(i18n("Sort failed"))
+        }
+        xhr.ontimeout = function() { setStatus(i18n("Sort timed out")) }
+        try {
+            xhr.open("GET", "https://api.coinbase.com/v2/exchange-rates?currency=USD")
+            xhr.setRequestHeader("Accept", "application/json")
+            xhr.send()
+        } catch (e) { setStatus(i18n("Sort failed")) }
     }
 
     function doFetchCoinGeckoRates() {
@@ -182,21 +252,19 @@ KCM.SimpleKCM {
         }
     }
 
-    function doFetchRates(server, key, canFallback) {
-        var fallback = "https://api.lzt.market"
+    function doFetchRates(server, key) {
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
         xhr.onreadystatechange = function() {
             if (xhr.readyState !== XMLHttpRequest.DONE) return
             if (xhr.status === 200) {
                 try {
-                    var data = JSON.parse(xhr.responseText)
-                    var j = (data && data.jobs) ? data.jobs["1"] : null
-                    if (j && j._job_result === "ok" && j.currencyList) {
+                    var list = JSON.parse(xhr.responseText).currencyList
+                    if (list) {
                         var rates = {}
-                        for (var k in j.currencyList)
-                            if (j.currencyList.hasOwnProperty(k) && j.currencyList[k].rate > 0)
-                                rates[k] = j.currencyList[k].rate
+                        for (var k in list)
+                            if (list.hasOwnProperty(k) && list[k].rate > 0)
+                                rates[k] = list[k].rate
                         applySort(rates)
                         return
                     }
@@ -204,21 +272,19 @@ KCM.SimpleKCM {
                 setStatus(i18n("Sort failed"))
             } else if (xhr.status === 401) {
                 setStatus(i18n("Bad API token"))
-            } else if (canFallback) {
-                doFetchRates(fallback, key, false)
             } else {
                 setStatus(i18n("Sort failed"))
             }
         }
-        xhr.ontimeout = function() {
-            if (canFallback) doFetchRates(fallback, key, false)
-            else setStatus(i18n("Sort timed out"))
+        xhr.ontimeout = function() { setStatus(i18n("Sort timed out")) }
+        try {
+            xhr.open("GET", server + "/currency")
+            xhr.setRequestHeader("Accept",        "application/json")
+            xhr.setRequestHeader("Authorization", "Bearer " + key)
+            xhr.send()
+        } catch (e) {
+            setStatus(i18n("Sort failed"))
         }
-        xhr.open("POST", server + "/batch")
-        xhr.setRequestHeader("Content-Type",  "application/json")
-        xhr.setRequestHeader("Accept",        "application/json")
-        xhr.setRequestHeader("Authorization", "Bearer " + key)
-        xhr.send(JSON.stringify([{ method: "GET", uri: server + "/currency", id: "1" }]))
     }
 
     // Coin price in USD (rates are RUB-per-unit). Missing rate -> -1 (sinks).
@@ -297,10 +363,13 @@ KCM.SimpleKCM {
                          : (index % 2 === 0 ? Kirigami.Theme.backgroundColor : Kirigami.Theme.alternateBackgroundColor)
 
                     RowLayout {
+                        id: coinRow
                         anchors.fill: parent
                         anchors.leftMargin: 12
                         anchors.rightMargin: 12
                         spacing: 12
+                        property bool supported: Rates.providerSupports(page.cfg_cryptoProvider, model.code)
+                        opacity: supported ? 1.0 : 0.45
 
                         Image {
                             source: page.iconSource(model.code)
@@ -321,6 +390,12 @@ KCM.SimpleKCM {
                             text: page.currencyLabel(model.currency)
                             Layout.fillWidth: true
                             color: coinsList.currentIndex === index ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                        }
+                        PlasmaComponents.Label {
+                            visible: !coinRow.supported
+                            text: i18n("not on %1", page.providerLabel(page.cfg_cryptoProvider))
+                            color: Kirigami.Theme.neutralTextColor
+                            font.italic: true
                         }
                     }
 

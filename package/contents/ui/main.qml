@@ -29,13 +29,13 @@ PlasmoidItem {
 
     property var    currencyRates: ({})
 
-    // Track the single in-flight XHR and a generation counter so that stale
-    // callbacks from a previously aborted or superseded request are ignored.
-    // This prevents multiple overlapping requests from piling up when the
-    // network is slow or the API is unreachable, which can leak memory and
-    // eventually wedge or crash plasmashell.
+    // Track the in-flight XHRs of the current fetch cycle and a generation
+    // counter so that stale callbacks from a previously aborted or superseded
+    // request are ignored. A cycle can have more than one parallel request
+    // (/me + /currency, or a crypto ticker + its fiat anchor), so we keep an
+    // array rather than a single handle.
     property int    fetchGeneration: 0
-    property var    activeXhr: null
+    property var    activeXhrs: []
 
     // Retry/backoff state. On a failed fetch we schedule ONE retry after an
     // exponentially growing delay (with jitter), and honor the server's
@@ -83,14 +83,18 @@ PlasmoidItem {
 
     // Parsed from Plasmoid.configuration.cryptoList; drives the panel Repeater.
     property var cryptoEntries: []
+    // Only the coins the selected provider can actually price; the panel hides
+    // the rest (the icon set is fixed, we never add new coins).
+    readonly property var visibleCryptoEntries: Rates.providerVisibleEntries(cryptoProvider, cryptoEntries)
+    // Any non-LZT provider is self-contained, so it can run without a token.
     readonly property bool canFetchCryptoWithoutToken: apiKey.length === 0
-        && cryptoProvider === "coingecko"
-        && cryptoEntries.length > 0
+        && cryptoProvider !== "lzt"
+        && visibleCryptoEntries.length > 0
         && !tokenStoredButEmpty
     readonly property bool showBalanceBlock: apiKey.length > 0
         || hasError
-        || cryptoProvider !== "coingecko"
-        || cryptoEntries.length === 0
+        || cryptoProvider === "lzt"
+        || visibleCryptoEntries.length === 0
 
     // Fixed crypto price color — a soft off-white (dimmer than pure white).
     readonly property color cryptoColor: "#D6D6D6"
@@ -147,7 +151,7 @@ PlasmoidItem {
     // Checks GitHub for newer releases (daily + on demand via context menu).
     UpdateChecker {
         id: updateChecker
-        currentVersion: "3.6.0"
+        currentVersion: "3.7.0"
     }
 
     // Auto-hide the transfer status (success / error) after 2 seconds.
@@ -273,7 +277,7 @@ PlasmoidItem {
 
             // ── Separator before crypto rates ───────────────────────
             Rectangle {
-                visible: root.cryptoEntries.length > 0 && root.showBalanceBlock
+                visible: root.visibleCryptoEntries.length > 0 && root.showBalanceBlock
                 Layout.preferredWidth: 1
                 Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                 Layout.leftMargin: Kirigami.Units.smallSpacing
@@ -284,7 +288,7 @@ PlasmoidItem {
 
             // ── Crypto rates ────────────────────────────────────────
             Repeater {
-                model: root.cryptoEntries
+                model: root.visibleCryptoEntries
                 delegate: RowLayout {
                     required property var modelData
                     spacing: Kirigami.Units.smallSpacing
@@ -758,8 +762,8 @@ PlasmoidItem {
             Plasmoid.configuration.coingeckoApiKey = Secret.encode(storedCg)
         }
 
-        // Only api.lzt.market serves the /batch jobs we need; move any stored
-        // value (prod-api, lolz.team, zelenka.guru) to it.
+        // Only api.lzt.market serves the /me and /currency endpoints we need;
+        // move any stored value (prod-api, lolz.team, zelenka.guru) to it.
         var storedServer = Plasmoid.configuration.apiServer || ""
         if (storedServer !== "https://api.lzt.market") {
             console.log("[lzt] migrating API server to https://api.lzt.market")
@@ -840,34 +844,71 @@ PlasmoidItem {
         return Rates.formatRate(v) + sym
     }
 
-    // Start a new request: abort any previous in-flight request and become the
-    // current active XHR. The generation counter lets stale callbacks from an
-    // aborted request identify themselves and bail out.
-    function startFetch(xhr) {
+    // Begin a new fetch cycle: bump the generation, abort whatever the previous
+    // cycle left in flight, and arm the watchdog. Returns the generation stamp
+    // that every callback in this cycle must compare against.
+    function startFetch() {
         fetchGeneration++
-        if (activeXhr) {
-            try { activeXhr.abort() } catch (e) {}
+        for (var i = 0; i < activeXhrs.length; i++) {
+            try { activeXhrs[i].abort() } catch (e) {}
         }
-        activeXhr = xhr
+        activeXhrs = []
         pendingFetch = true
         fetchWatchdog.restart()
+        return fetchGeneration
+    }
+
+    // Register an extra request belonging to the current cycle so endFetch can
+    // abort it if the cycle is superseded before it finishes.
+    function trackRequest(xhr) {
+        activeXhrs.push(xhr)
     }
 
     // Single point that clears the in-flight flag, stops the watchdog, and
-    // aborts the underlying request. Every code path that finishes a fetch must
-    // call this so pendingFetch can never get permanently stuck.
+    // aborts every request of the cycle. Every code path that finishes a fetch
+    // must call this so pendingFetch can never get permanently stuck.
     function endFetch() {
-        var xhr = activeXhr
-        activeXhr = null
-        if (xhr) {
-            try { xhr.abort() } catch (e) {}
+        var xs = activeXhrs
+        activeXhrs = []
+        for (var i = 0; i < xs.length; i++) {
+            try { xs[i].abort() } catch (e) {}
         }
         pendingFetch = false
         fetchWatchdog.stop()
     }
 
-    function isCurrentRequest(xhr) {
-        return xhr === activeXhr
+    function isCurrentRequest(gen) {
+        return gen === fetchGeneration
+    }
+
+    // Fire one GET in the current cycle. `headers` is an optional map of extra
+    // request headers. onDone(status, text, xhr) is called exactly once, and
+    // never for a superseded cycle.
+    function fireGet(gen, url, headers, onDone) {
+        var xhr = new XMLHttpRequest()
+        xhr.timeout = 10000
+        trackRequest(xhr)
+        xhr.onreadystatechange = function() {
+            if (!isCurrentRequest(gen)) return
+            if (xhr.readyState !== XMLHttpRequest.DONE) return
+            onDone(xhr.status, xhr.responseText, xhr)
+        }
+        xhr.ontimeout = function() {
+            if (!isCurrentRequest(gen)) return
+            onDone(0, "", xhr)
+        }
+        try {
+            xhr.open("GET", url)
+            xhr.setRequestHeader("Accept", "application/json")
+            if (headers)
+                for (var h in headers)
+                    if (headers.hasOwnProperty(h) && headers[h]) xhr.setRequestHeader(h, headers[h])
+            xhr.send()
+        } catch (e) {
+            console.log("[lzt] GET send threw: " + e)
+            if (!isCurrentRequest(gen)) return
+            onDone(-1, "", xhr)
+        }
     }
 
     // Read the server-requested cooldown from a Retry-After header (seconds).
@@ -939,140 +980,276 @@ PlasmoidItem {
         if (pendingFetch) return
         if (apiKey.length === 0) {
             if (canFetchCryptoWithoutToken) {
-                pendingFetch = true
-                fetchWatchdog.restart()
+                var gen0 = startFetch()
                 hasError = false
                 statusText = ""
-                fetchCoinGeckoRates()
+                fetchCryptoRates(gen0)
             } else {
                 statusText = "No API Key"
                 hasError = true
             }
             return
         }
-        doFetchBatch(primaryServer, false)
+        doFetchLzt()
     }
 
-    function doFetchBatch(server, canFallback) {
+    // LZT: two independent GETs in parallel instead of one /batch POST.
+    // /batch costs three upstream calls (1 POST + the 2 GETs it fans out to)
+    // and the POST is limited to 30/min, so hitting /me and /currency directly
+    // is cheaper, simpler and rate-limits far less.
+    function doFetchLzt() {
         if (pendingFetch) return
+        var gen = startFetch()
+        var server = primaryServer
+        var remaining = 2
+        var gotCurrency = false
+        var gotUser = false
+        var lastStatus = 0
+        var lastXhr = null
 
-        var jobs = [
-            { method: "GET", uri: server + "/currency", id: "1" },
-            { method: "GET", uri: server + "/me",       id: "2" }
-        ]
-        var xhr = new XMLHttpRequest()
-        xhr.timeout = 10000
-        startFetch(xhr)
-
-        xhr.onreadystatechange = function() {
-            if (!isCurrentRequest(xhr)) return
-            if (xhr.readyState !== XMLHttpRequest.DONE) return
-            if (xhr.status === 200) {
+        function settle() {
+            if (remaining > 0) return
+            if (gotCurrency || gotUser) {
                 resetRetry()
-                var needCrypto = parseBatchResponse(xhr.responseText)
-                if (needCrypto) fetchCoinGeckoRates()
-                else endFetch()
-            } else if (xhr.status === 401) {
-                statusText = "Bad Token"; hasError = true; resetRetry(); endFetch()
-            } else if (canFallback) {
-                doFetchBatch(fallbackServer, false)
+                fetchCryptoRates(gen)
             } else {
-                if      (xhr.status === 429) statusText = "Rate Limit"
-                else if (xhr.status === 0)   statusText = "Offline"
-                else                         statusText = "Err " + xhr.status
-                if (!hasFetchedOnce) hasError = true
-                noteFailure(xhr.status, retryAfterSeconds(xhr))
-                endFetch()
-            }
-        }
-        xhr.ontimeout = function() {
-            if (!isCurrentRequest(xhr)) return
-            if (canFallback) doFetchBatch(fallbackServer, false)
-            else {
-                if (!hasFetchedOnce) { statusText = "Timeout"; hasError = true }
-                noteFailure(0, 0)
-                endFetch()
-            }
-        }
-
-        // open()/send() can THROW synchronously when the network stack isn't
-        // ready (common at boot). Without this guard the throw would skip
-        // every callback and leave pendingFetch stuck true forever.
-        try {
-            xhr.open("POST", server + "/batch")
-            xhr.setRequestHeader("Content-Type", "application/json")
-            xhr.setRequestHeader("Accept",       "application/json")
-            xhr.setRequestHeader("Authorization","Bearer " + apiKey)
-            xhr.send(JSON.stringify(jobs))
-        } catch (e) {
-            console.log("[lzt] fetch send threw: " + e)
-            if (!isCurrentRequest(xhr)) return
-            if (canFallback) {
-                doFetchBatch(fallbackServer, false)
-            } else {
-                if (!hasFetchedOnce) { statusText = "Offline"; hasError = true }
-                noteFailure(0, 0)
-                endFetch()
-            }
-        }
-    }
-
-    function parseBatchResponse(raw) {
-        // Crypto (CoinGecko) is independent of the LZT jobs: fetch it whenever
-        // the provider is CoinGecko and coins are configured, even if /currency
-        // or /me came back with an error. Previously a single failed LZT job
-        // silently suppressed the crypto rates.
-        var shouldFetchCoinGecko = cryptoProvider === "coingecko" && cryptoEntries.length > 0
-        try {
-            var data = JSON.parse(raw)
-            if (!data || !data.jobs) throw new Error("no jobs")
-
-            var j1 = data.jobs["1"]
-            var j2 = data.jobs["2"]
-
-            if (j1 && j1._job_result === "ok" && j1.currencyList) {
-                var list = j1.currencyList
-                var rates = {}
-                for (var key in list)
-                    if (list.hasOwnProperty(key) && list[key].rate > 0) rates[key] = list[key].rate
-                currencyRates = rates
-            }
-
-            if (j2 && j2._job_result === "ok" && j2.user) {
-                var u = j2.user
-                var newBalStr = (u.balance !== undefined && u.balance !== null) ? String(u.balance) : "0.00"
-
-                // Detect balance change and fire a desktop notification.
-                // Skip the very first fetch — we don't want a popup showing
-                // the entire initial balance on widget load / Plasma restart.
-                if (hasFetchedOnce) {
-                    var oldBal = parseFloat(rawBalance)
-                    var newBal = parseFloat(newBalStr)
-                    if (!isNaN(oldBal) && !isNaN(newBal) && Math.abs(newBal - oldBal) >= 0.01) {
-                        sendBalanceNotification(newBal - oldBal)
-                    }
+                if (!hasFetchedOnce) {
+                    if      (lastStatus === 429) statusText = "Rate Limit"
+                    else if (lastStatus <= 0)    statusText = "Offline"
+                    else                         statusText = "Err " + lastStatus
+                    hasError = true
                 }
-
-                rawBalance = newBalStr
-                rawHold    = (u.hold !== undefined && u.hold !== null) ? String(u.hold) : "0.00"
-                hasFetchedOnce = true
-                hasError = false
-                statusText = ""
-            } else if (!hasFetchedOnce) {
-                statusText = "Parse Err"; hasError = true
+                noteFailure(lastStatus <= 0 ? 0 : lastStatus,
+                            lastXhr ? retryAfterSeconds(lastXhr) : 0)
+                endFetch()
             }
-
-            recalcDisplay()
-        } catch (e) {
-            if (!hasFetchedOnce) { statusText = "Parse Err"; hasError = true }
-            noteFailure(0, 0)
         }
-        return shouldFetchCoinGecko
+        function badToken() {
+            if (!hasFetchedOnce) { statusText = "Bad Token"; hasError = true }
+            resetRetry(); endFetch()
+        }
+        function onCurrency(status, text, xhr) {
+            if (status === 401) { badToken(); return }
+            lastStatus = status; lastXhr = xhr
+            if (status === 200 && parseLztCurrency(text)) gotCurrency = true
+            remaining--; settle()
+        }
+        function onUser(status, text, xhr) {
+            if (status === 401) { badToken(); return }
+            lastStatus = status; lastXhr = xhr
+            if (status === 200 && parseLztUser(text)) gotUser = true
+            remaining--; settle()
+        }
+
+        fireGet(gen, server + "/currency", authHeaders(), onCurrency)
+        fireGet(gen, server + "/me",       authHeaders(), onUser)
     }
 
-    function fetchCoinGeckoRates() {
-        var ids = Rates.coingeckoIdsForEntries(cryptoEntries, displayCurrency !== "RUB")
-        var quotes = Rates.coingeckoQuotesForEntries(cryptoEntries, displayCurrency)
+    function authHeaders() {
+        return { "Authorization": "Bearer " + apiKey }
+    }
+
+    function isEmptyObj(o) {
+        for (var k in o) if (o.hasOwnProperty(k)) return false
+        return true
+    }
+
+    function parseLztCurrency(raw) {
+        try {
+            var list = JSON.parse(raw).currencyList
+            if (!list) return false
+            var rates = {}
+            for (var key in list)
+                if (list.hasOwnProperty(key) && list[key].rate > 0) rates[key] = list[key].rate
+            currencyRates = rates
+            recalcDisplay()
+            return true
+        } catch (e) {
+            console.log("[lzt] currency parse failed: " + e)
+            return false
+        }
+    }
+
+    function parseLztUser(raw) {
+        try {
+            var u = JSON.parse(raw).user
+            if (!u) return false
+            var newBalStr = (u.balance !== undefined && u.balance !== null) ? String(u.balance) : "0.00"
+
+            // Detect balance change and fire a desktop notification. Skip the
+            // very first fetch — we don't want a popup showing the entire
+            // initial balance on widget load / Plasma restart.
+            if (hasFetchedOnce) {
+                var oldBal = parseFloat(rawBalance)
+                var newBal = parseFloat(newBalStr)
+                if (!isNaN(oldBal) && !isNaN(newBal) && Math.abs(newBal - oldBal) >= 0.01) {
+                    sendBalanceNotification(newBal - oldBal)
+                }
+            }
+
+            rawBalance = newBalStr
+            rawHold    = (u.hold !== undefined && u.hold !== null) ? String(u.hold) : "0.00"
+            hasFetchedOnce = true
+            hasError = false
+            statusText = ""
+            recalcDisplay()
+            return true
+        } catch (e) {
+            console.log("[lzt] user parse failed: " + e)
+            return false
+        }
+    }
+
+    // A crypto-provider request failed. Surface a status only before the first
+    // successful load; always arm the shared backoff.
+    function cryptoFailed(status, tag, xhr) {
+        if (!hasFetchedOnce && !hasCryptoFetchedOnce) {
+            statusText = (status <= 0) ? "Offline" : (tag + " Err " + status)
+            hasError = true
+        }
+        noteFailure(status <= 0 ? 0 : status, xhr ? retryAfterSeconds(xhr) : 0)
+    }
+
+    // Dispatch to the selected provider. "lzt" needs nothing extra: its crypto
+    // rates already arrived with /currency.
+    function fetchCryptoRates(gen) {
+        var entries = visibleCryptoEntries
+        if (entries.length === 0) { endFetch(); return }
+        if      (cryptoProvider === "coingecko") fetchCoinGeckoRates(gen, entries)
+        else if (cryptoProvider === "binance")   fetchUsdProvider(gen, entries, "binance")
+        else if (cryptoProvider === "kraken")    fetchUsdProvider(gen, entries, "kraken")
+        else if (cryptoProvider === "coinbase")  fetchCoinbaseRates(gen, entries)
+        else                                     endFetch()
+    }
+
+    // Fiat anchors (RUB/EUR/UAH per unit) — LZT's own rates win, else the
+    // free keyless open.er-api snapshot.
+    function resolveFiat(erFiat) {
+        var out = {}
+        var keys = ["USD", "EUR", "UAH"]
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i]
+            if (currencyRates[k] > 0)            out[k] = currencyRates[k]
+            else if (erFiat && erFiat[k] > 0)    out[k] = erFiat[k]
+        }
+        return out
+    }
+
+    // Merge USD-priced coins into currencyRates (RUB-per-unit), the same shape
+    // the panel already consumes.
+    function applyUsdPrices(usdPerCoin, erFiat) {
+        var fiat = resolveFiat(erFiat)
+        var rubPerUsd = fiat["USD"]
+        if (!rubPerUsd || rubPerUsd <= 0) {
+            console.log("[lzt] no fiat anchor available for " + cryptoProvider)
+            cryptoFailed(0, cryptoProvider)
+            return
+        }
+        var merged = {}
+        for (var k in currencyRates)
+            if (currencyRates.hasOwnProperty(k)) merged[k] = currencyRates[k]
+
+        var touched = false
+        for (var i = 0; i < visibleCryptoEntries.length; i++) {
+            var code = visibleCryptoEntries[i].code
+            var usd = usdPerCoin[code]
+            if (usd > 0) { merged[code] = usd * rubPerUsd; touched = true }
+        }
+        if (fiat["EUR"] > 0) merged["EUR"] = fiat["EUR"]
+        if (fiat["UAH"] > 0) merged["UAH"] = fiat["UAH"]
+        merged["USD"] = rubPerUsd
+
+        if (!touched && !hasCryptoFetchedOnce) { cryptoFailed(0, cryptoProvider); return }
+
+        currencyRates = merged
+        var first = !hasCryptoFetchedOnce
+        hasCryptoFetchedOnce = true
+        resetRetry()
+        if (first) console.log("[lzt] " + cryptoProvider + " ok — crypto rates loaded")
+        if (apiKey.length === 0) { hasError = false; statusText = "" }
+        recalcDisplay()
+    }
+
+    // Binance / Kraken: USD/USDT tickers. Binance has no usable RUB pair any
+    // more, so both go through the fiat anchor lane.
+    function fetchUsdProvider(gen, entries, provider) {
+        var map = (provider === "binance") ? Rates.BINANCE_PAIRS : Rates.KRAKEN_PAIRS
+        var syms = Rates.providerSymbolsForEntries(map, entries)
+        if (syms.length === 0) { endFetch(); return }
+
+        var needAnchor = !(currencyRates["USD"] > 0)
+        var pending = needAnchor ? 2 : 1
+        var prices = null
+        var erFiat = null
+        var finished = false
+
+        function fail(status, xhr) {
+            if (finished) return
+            finished = true
+            cryptoFailed(status, provider, xhr)
+            endFetch()
+        }
+        function done() {
+            if (finished) return
+            if (--pending > 0) return
+            finished = true
+            if (!prices || isEmptyObj(prices)) { cryptoFailed(0, provider); endFetch(); return }
+            applyUsdPrices(prices, erFiat)
+            endFetch()
+        }
+
+        var tickerUrl
+        if (provider === "binance")
+            tickerUrl = "https://api.binance.com/api/v3/ticker/price?symbols="
+                      + encodeURIComponent(JSON.stringify(syms))
+        else
+            tickerUrl = "https://api.kraken.com/0/public/Ticker?pair=" + syms.join(",")
+
+        fireGet(gen, tickerUrl, null, function(status, text, xhr) {
+            if (status === 200) {
+                try {
+                    prices = (provider === "binance") ? Rates.parseBinancePrices(text)
+                                                      : Rates.parseKrakenPrices(text)
+                } catch (e) { prices = null }
+            }
+            if (!prices || isEmptyObj(prices)) { fail(status, xhr); return }
+            done()
+        })
+
+        if (needAnchor) {
+            fireGet(gen, "https://open.er-api.com/v6/latest/USD", null, function(status, text) {
+                if (status === 200) {
+                    try { erFiat = Rates.parseErApiFiat(text) } catch (e) { erFiat = null }
+                }
+                done()
+            })
+        }
+    }
+
+    // Coinbase: a single request gives both the coin prices and the fiat
+    // anchors (native RUB/EUR/UAH), so it never needs the er-api fallback.
+    function fetchCoinbaseRates(gen, entries) {
+        fireGet(gen, "https://api.coinbase.com/v2/exchange-rates?currency=USD",
+                null, function(status, text, xhr) {
+            if (status !== 200) { cryptoFailed(status, "CB", xhr); endFetch(); return }
+            var data = null
+            try { data = Rates.parseCoinbaseRates(text) } catch (e) { data = null }
+            if (!data || isEmptyObj(data.coins)) { cryptoFailed(0, "CB"); endFetch(); return }
+
+            var erFiat = null
+            if (data.fiat && data.fiat.RUB > 0) {
+                erFiat = { "USD": data.fiat.RUB }
+                if (data.fiat.EUR > 0) erFiat["EUR"] = data.fiat.RUB / data.fiat.EUR
+                if (data.fiat.UAH > 0) erFiat["UAH"] = data.fiat.RUB / data.fiat.UAH
+            }
+            applyUsdPrices(data.coins, erFiat)
+            endFetch()
+        })
+    }
+
+    function fetchCoinGeckoRates(gen, entries) {
+        var ids = Rates.coingeckoIdsForEntries(entries, displayCurrency !== "RUB")
+        var quotes = Rates.coingeckoQuotesForEntries(entries, displayCurrency)
         if (ids.length === 0) { endFetch(); return }
 
         var url = "https://api.coingecko.com/api/v3/simple/price"
@@ -1080,48 +1257,19 @@ PlasmoidItem {
             + "&vs_currencies=" + encodeURIComponent(quotes.join(","))
             + "&include_last_updated_at=true"
 
-        var xhr = new XMLHttpRequest()
-        xhr.timeout = 10000
-        startFetch(xhr)
-        xhr.onreadystatechange = function() {
-            if (!isCurrentRequest(xhr)) return
-            if (xhr.readyState !== XMLHttpRequest.DONE) return
-            if (xhr.status === 200) {
-                parseCoinGeckoResponse(xhr.responseText)
+        var headers = coingeckoApiKey.length > 0 ? { "x-cg-demo-api-key": coingeckoApiKey } : null
+        fireGet(gen, url, headers, function(status, text, xhr) {
+            if (status === 200) {
+                parseCoinGeckoResponse(text, entries, quotes)
             } else {
-                console.log("[lzt] coingecko failed: " + xhr.status)
-                if (!hasFetchedOnce && !hasCryptoFetchedOnce) {
-                    statusText = xhr.status === 0 ? "Offline" : ("CG Err " + xhr.status)
-                    hasError = true
-                }
-                noteFailure(xhr.status, retryAfterSeconds(xhr))
+                console.log("[lzt] coingecko failed: " + status)
+                cryptoFailed(status, "CG", xhr)
             }
             endFetch()
-        }
-        xhr.ontimeout = function() {
-            if (!isCurrentRequest(xhr)) return
-            console.log("[lzt] coingecko timed out")
-            if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Timeout"; hasError = true }
-            noteFailure(0, 0)
-            endFetch()
-        }
-
-        try {
-            xhr.open("GET", url)
-            xhr.setRequestHeader("Accept", "application/json")
-            if (coingeckoApiKey.length > 0)
-                xhr.setRequestHeader("x-cg-demo-api-key", coingeckoApiKey)
-            xhr.send()
-        } catch (e) {
-            console.log("[lzt] coingecko send threw: " + e)
-            if (!isCurrentRequest(xhr)) return
-            if (!hasFetchedOnce && !hasCryptoFetchedOnce) { statusText = "Offline"; hasError = true }
-            noteFailure(0, 0)
-            endFetch()
-        }
+        })
     }
 
-    function parseCoinGeckoResponse(raw) {
+    function parseCoinGeckoResponse(raw, entries, quotes) {
         try {
             var data = JSON.parse(raw)
             var merged = {}
@@ -1129,9 +1277,8 @@ PlasmoidItem {
                 if (currencyRates.hasOwnProperty(k)) merged[k] = currencyRates[k]
 
             var touched = false
-            var quotes = Rates.coingeckoQuotesForEntries(cryptoEntries, displayCurrency)
-            for (var i = 0; i < cryptoEntries.length; i++) {
-                var code = cryptoEntries[i].code
+            for (var i = 0; i < entries.length; i++) {
+                var code = entries[i].code
                 var id = Rates.coingeckoId(code)
                 if (id.length === 0 || !data[id] || !data[id].rub || data[id].rub <= 0) continue
                 merged[code] = data[id].rub

@@ -129,7 +129,10 @@ KCM.SimpleKCM {
         Kirigami.FormData.label: i18n("Crypto provider:")
         model: [
             { text: "LZT Market", value: "lzt" },
-            { text: "CoinGecko",  value: "coingecko" }
+            { text: "CoinGecko",  value: "coingecko" },
+            { text: "Binance",    value: "binance" },
+            { text: "Kraken",     value: "kraken" },
+            { text: "Coinbase",   value: "coinbase" }
         ]
         textRole: "text"
         valueRole: "value"
