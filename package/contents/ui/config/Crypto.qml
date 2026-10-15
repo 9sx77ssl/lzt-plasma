@@ -35,6 +35,17 @@ KCM.SimpleKCM {
         "BTC","ETH","BNB","XMR","BCH","SOL","LTC","DASH",
         "AVAX","GRAM","USDC","DAI","USDT","TRX","POL","MATIC","SHIB"
     ]
+    // Coins the ADD dialog offers — only those the selected provider can price.
+    // Coins already in the list that a provider dropped are NOT removed; the
+    // list keeps them, greyed out, with a "not on <provider>" hint.
+    readonly property var addableCoins: {
+        var out = []
+        for (var i = 0; i < supportedCoins.length; i++) {
+            var c = supportedCoins[i]
+            if (Rates.providerSupports(cfg_cryptoProvider, c)) out.push(c)
+        }
+        return out
+    }
     // Same shortlist as the balance display currency.
     readonly property var currencyModel: [
         { text: "RUB  ₽",  value: "RUB" },
@@ -314,6 +325,7 @@ KCM.SimpleKCM {
 
     function openAdd() {
         editIndex = -1
+        coinCombo.model = addableCoins
         coinCombo.currentIndex = 0
         currencyCombo.currentIndex = 1   // USD
         editDialog.open()
@@ -322,6 +334,7 @@ KCM.SimpleKCM {
         if (idx < 0 || idx >= coinsModel.count) return
         var it = coinsModel.get(idx)
         editIndex = idx
+        coinCombo.model = supportedCoins
         coinCombo.currentIndex = Math.max(0, supportedCoins.indexOf(it.code))
         var ci = 1
         for (var i = 0; i < currencyModel.length; i++)
@@ -495,8 +508,13 @@ KCM.SimpleKCM {
         standardButtons: QQC2.Dialog.Save | QQC2.Dialog.Cancel
 
         onAccepted: {
+            // Read the selected coin from the combo itself: in Add mode the
+            // model is the filtered `addableCoins`, so it must not be indexed
+            // against the full `supportedCoins` list.
+            var coin = String(coinCombo.currentText)
+            if (coin.length === 0) coin = supportedCoins[0]
             var obj = {
-                code:     page.supportedCoins[coinCombo.currentIndex],
+                code:     coin,
                 currency: page.currencyModel[currencyCombo.currentIndex].value
             }
             if (page.editIndex === -1) coinsModel.append(obj)
@@ -510,7 +528,8 @@ KCM.SimpleKCM {
             QQC2.ComboBox {
                 id: coinCombo
                 Layout.fillWidth: true
-                model: page.supportedCoins
+                // Model is assigned in openAdd()/openEdit() so Add can hide
+                // provider-unsupported coins while Edit keeps the full list.
             }
             QQC2.ComboBox {
                 id: currencyCombo

@@ -65,8 +65,9 @@ function coingeckoQuotesForEntries(entries, extraCurrency) {
 // panel hides that coin while the provider is selected (Level: the widget's
 // icon set is fixed, we never add new coins).
 
-// Binance spot pairs (USDT quote). XMR was delisted there and DAI is halted,
-// so neither is offered; USDT itself is a stablecoin priced at 1 USD.
+// Binance spot pairs (USDT quote). XMR was delisted, DAI is halted, USDT is the
+// quote asset itself (no USDT/USDT pair) and MATIC was migrated to POL — so none
+// of those four are offered here.
 var BINANCE_PAIRS = {
     "BTC": "BTCUSDT", "ETH": "ETHUSDT", "BNB": "BNBUSDT", "BCH": "BCHUSDT",
     "SOL": "SOLUSDT", "LTC": "LTCUSDT", "DASH": "DASHUSDT", "AVAX": "AVAXUSDT",

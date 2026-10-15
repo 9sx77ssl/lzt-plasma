@@ -81,8 +81,14 @@ Item {
             activeXhr = null
             if (force) notify(i18n("Update check failed"))
         }
-        xhr.open("GET", url)
-        xhr.send()
+        try {
+            xhr.open("GET", url)
+            xhr.send()
+        } catch (e) {
+            checking = false
+            activeXhr = null
+            if (force) notify(i18n("Update check failed"))
+        }
     }
 
     function notify(msg) { notif.text = msg; notif.sendEvent() }

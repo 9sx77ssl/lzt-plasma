@@ -27,6 +27,10 @@ PlasmoidItem {
     property string transferStatus:   ""
     property bool   transferSuccess:  false
 
+    // Minimum spacing between balance-change notifications (ms).
+    property double lastBalanceNotifyMs: 0
+    readonly property int balanceNotifyCooldownMs: 15000
+
     property var    currencyRates: ({})
 
     // Track the in-flight XHRs of the current fetch cycle and a generation
@@ -36,6 +40,13 @@ PlasmoidItem {
     // array rather than a single handle.
     property int    fetchGeneration: 0
     property var    activeXhrs: []
+
+    // One mutable object per cycle. endFetch() flips `closed` to true so that
+    // any callback still queued by an aborted request (e.g. the sibling of a
+    // 401, or a request killed by the watchdog) is ignored instead of running
+    // after the cycle already ended — which used to schedule a retry on top of
+    // a bad token and cause a slow retry ping-pong.
+    property var    fetchCycle: null
 
     // Retry/backoff state. On a failed fetch we schedule ONE retry after an
     // exponentially growing delay (with jitter), and honor the server's
@@ -151,7 +162,7 @@ PlasmoidItem {
     // Checks GitHub for newer releases (daily + on demand via context menu).
     UpdateChecker {
         id: updateChecker
-        currentVersion: "3.7.0"
+        currentVersion: "3.7.1"
     }
 
     // Auto-hide the transfer status (success / error) after 2 seconds.
@@ -853,6 +864,7 @@ PlasmoidItem {
             try { activeXhrs[i].abort() } catch (e) {}
         }
         activeXhrs = []
+        fetchCycle = { closed: false }
         pendingFetch = true
         fetchWatchdog.restart()
         return fetchGeneration
@@ -868,6 +880,10 @@ PlasmoidItem {
     // aborts every request of the cycle. Every code path that finishes a fetch
     // must call this so pendingFetch can never get permanently stuck.
     function endFetch() {
+        // Mark the cycle closed BEFORE aborting, so any readystatechange that
+        // abort() fires synchronously is already silenced by the guard in
+        // fireGet()/the cycle check below.
+        if (fetchCycle) fetchCycle.closed = true
         var xs = activeXhrs
         activeXhrs = []
         for (var i = 0; i < xs.length; i++) {
@@ -882,21 +898,29 @@ PlasmoidItem {
     }
 
     // Fire one GET in the current cycle. `headers` is an optional map of extra
-    // request headers. onDone(status, text, xhr) is called exactly once, and
-    // never for a superseded cycle.
+    // request headers. onDone(status, text, xhr) is called at most once, and
+    // never once the cycle it belongs to has ended (generation changed OR the
+    // cycle token was closed by endFetch). A throwing handler is caught and
+    // treated as a failed cycle so pendingFetch can't stay stuck.
     function fireGet(gen, url, headers, onDone) {
+        var cycle = fetchCycle
         var xhr = new XMLHttpRequest()
         xhr.timeout = 10000
         trackRequest(xhr)
+        function deliver(status, text) {
+            if (!isCurrentRequest(gen) || (cycle && cycle.closed)) return
+            try {
+                onDone(status, text, xhr)
+            } catch (e) {
+                console.log("[lzt] request handler threw: " + e)
+                endFetch()
+            }
+        }
         xhr.onreadystatechange = function() {
-            if (!isCurrentRequest(gen)) return
             if (xhr.readyState !== XMLHttpRequest.DONE) return
-            onDone(xhr.status, xhr.responseText, xhr)
+            deliver(xhr.status, xhr.responseText)
         }
-        xhr.ontimeout = function() {
-            if (!isCurrentRequest(gen)) return
-            onDone(0, "", xhr)
-        }
+        xhr.ontimeout = function() { deliver(0, "") }
         try {
             xhr.open("GET", url)
             xhr.setRequestHeader("Accept", "application/json")
@@ -906,8 +930,7 @@ PlasmoidItem {
             xhr.send()
         } catch (e) {
             console.log("[lzt] GET send threw: " + e)
-            if (!isCurrentRequest(gen)) return
-            onDone(-1, "", xhr)
+            deliver(-1, "")
         }
     }
 
@@ -1260,7 +1283,12 @@ PlasmoidItem {
         var headers = coingeckoApiKey.length > 0 ? { "x-cg-demo-api-key": coingeckoApiKey } : null
         fireGet(gen, url, headers, function(status, text, xhr) {
             if (status === 200) {
-                parseCoinGeckoResponse(text, entries, quotes)
+                try {
+                    parseCoinGeckoResponse(text, entries, quotes)
+                } catch (e) {
+                    console.log("[lzt] coingecko parse failed: " + e)
+                    cryptoFailed(0, "CG", xhr)
+                }
             } else {
                 console.log("[lzt] coingecko failed: " + status)
                 cryptoFailed(status, "CG", xhr)
@@ -1353,6 +1381,12 @@ PlasmoidItem {
     // We convert to the user-selected display currency so the notification
     // matches what they see in the panel.
     function sendBalanceNotification(deltaRub) {
+        // Cooldown: a flapping balance (e.g. hold/balance jitter from the API)
+        // must not spam desktop notifications. At most one per interval.
+        var now = Date.now()
+        if (now - lastBalanceNotifyMs < balanceNotifyCooldownMs) return
+        lastBalanceNotifyMs = now
+
         var symbol = "₽"
         var deltaDisplay = deltaRub
 
@@ -1483,10 +1517,17 @@ PlasmoidItem {
             }
         }
 
-        xhr.open("POST", server + "/balance/transfer")
-        xhr.setRequestHeader("Content-Type", "application/json")
-        xhr.setRequestHeader("Accept",       "application/json")
-        xhr.setRequestHeader("Authorization","Bearer " + apiKey)
-        xhr.send(JSON.stringify(body))
+        try {
+            xhr.open("POST", server + "/balance/transfer")
+            xhr.setRequestHeader("Content-Type", "application/json")
+            xhr.setRequestHeader("Accept",       "application/json")
+            xhr.setRequestHeader("Authorization","Bearer " + apiKey)
+            xhr.send(JSON.stringify(body))
+        } catch (e) {
+            // Never leave the form stuck in "Sending…" if the request can't
+            // even be constructed (bad URL, serialization error, …).
+            console.log("[lzt] transfer send threw: " + e)
+            transferStatus = "Failed"; transferSuccess = false; pendingTransfer = false
+        }
     }
 }

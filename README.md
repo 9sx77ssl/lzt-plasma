@@ -78,11 +78,11 @@ Right-click the widget → **Configure**:
 |---|---|---|
 | **LZT Market** | LZT token | all 17 |
 | **CoinGecko** | free Demo key recommended | all 17 |
-| **Binance** | none | all except XMR & DAI |
+| **Binance** | none | all except XMR, DAI, USDT & MATIC |
 | **Kraken** | none | all except MATIC |
 | **Coinbase** | none | all except XMR & TRX |
 
-Coins a provider doesn't list are simply **hidden in the panel** while that provider is selected (the icon set is fixed, so the widget never invents new coins); the CRYPTO tab dims them with a *"not on …"* hint. Binance and Kraken are priced in USD/USDT and converted with LZT's own RUB/EUR/UAH rates — or, when there's no LZT token, a free keyless `open.er-api.com` snapshot.
+Coins a provider can't price are **not offered in the Add dialog** (the icon set is fixed, so the widget never invents new coins). If you switch to a provider that dropped a coin you already added, the coin stays in the list and in the panel's saved order, but it's **greyed out with a *"not on <provider>"* hint** in the CRYPTO tab and **hidden in the panel**. Binance and Kraken are priced in USD/USDT and converted with LZT's own RUB/EUR/UAH rates — or, when there's no LZT token, a free keyless `open.er-api.com` snapshot.
 
 ### CoinGecko
 
