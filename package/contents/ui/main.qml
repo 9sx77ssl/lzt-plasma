@@ -162,7 +162,7 @@ PlasmoidItem {
     // Checks GitHub for newer releases (daily + on demand via context menu).
     UpdateChecker {
         id: updateChecker
-        currentVersion: "3.7.1"
+        currentVersion: "3.8.0"
     }
 
     // Auto-hide the transfer status (success / error) after 2 seconds.
@@ -348,12 +348,26 @@ PlasmoidItem {
         }
 
         mainItem: Rectangle {
-            width: 340
-            implicitHeight: dlgCol.implicitHeight + 32
-            color: "#0d0d0d"
-            radius: 12
-            border.color: "#262626"
+            width: 336
+            implicitHeight: dlgCol.implicitHeight + 28
+            color: brand.bg
+            radius: 10
+            border.color: brand.border
             border.width: 1
+
+            // LOLZ brand palette — lolz.team/pages/brand
+            QtObject {
+                id: brand
+                readonly property color green:   "#2BAD72"
+                readonly property color red:     "#884444"
+                readonly property color bg:      "#0c0f0e"
+                readonly property color surface: "#111615"
+                readonly property color raised:  "#181e1c"
+                readonly property color border:  "#1e2725"
+                readonly property color text:    "#ffffff"
+                readonly property color subtext: "#9aa39f"
+                readonly property color muted:   "#4a5450"
+            }
 
             ColumnLayout {
                 id: dlgCol
@@ -361,99 +375,100 @@ PlasmoidItem {
                     top:    parent.top
                     left:   parent.left
                     right:  parent.right
-                    margins: 16
+                    margins: 14
                 }
-                spacing: 7
+                spacing: 9
 
-                // ── Header card with subtle glow ────────────────
-                Rectangle {
+                // ── Header: logo · title · balance · close ──────
+                RowLayout {
                     Layout.fillWidth: true
-                    height: 60
-                    radius: 6
-                    border.color: "#262626"
-                    border.width: 1
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "#161616" }
-                        GradientStop { position: 0.5; color: "#171818" }
-                        GradientStop { position: 1.0; color: "#1b2620" }
+                    Layout.topMargin: 2
+                    spacing: 10
+
+                    Image {
+                        source: Qt.resolvedUrl("images/lolzteam.svg")
+                        Layout.preferredWidth: 18
+                        Layout.preferredHeight: 18
+                        Layout.alignment: Qt.AlignVCenter
+                        smooth: true; mipmap: true
                     }
 
-                    // Green accent bar
-                    Rectangle {
-                        x: 0; y: 12
-                        width: 3; height: 36
-                        radius: 2
-                        color: "#2BAD72"
+                    Text {
+                        text: i18n("Transfer")
+                        color: brand.text
+                        font.bold: true
+                        font.pixelSize: 14
+                        Layout.alignment: Qt.AlignVCenter
                     }
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 18
-                        anchors.rightMargin: 16
+                    Item { Layout.fillWidth: true }
+
+                    Column {
                         spacing: 0
-
-                        Image {
-                            source: Qt.resolvedUrl("images/lolzteam.svg")
-                            Layout.preferredWidth: 20
-                            Layout.preferredHeight: 20
-                            Layout.alignment: Qt.AlignVCenter
-                            smooth: true; mipmap: true
-                        }
+                        Layout.alignment: Qt.AlignVCenter
 
                         Text {
-                            text: "Transfer"
-                            color: "#2BAD72"
+                            anchors.right: parent.right
+                            text: root.displayText + root.displaySymbol
+                            color: brand.green
                             font.bold: true
-                            font.pixelSize: 16
-                            font.letterSpacing: 0.3
-                            Layout.fillWidth: true
-                            leftPadding: 11
-                            Layout.alignment: Qt.AlignVCenter
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignRight
                         }
+                        Text {
+                            anchors.right: parent.right
+                            visible: root.holdPositive
+                            text: i18n("hold") + " " + root.displayHold + root.displaySymbol
+                            color: brand.muted
+                            font.pixelSize: 9
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
 
-                        Column {
-                            spacing: 2
-                            Layout.alignment: Qt.AlignVCenter
+                    Rectangle {
+                        width: 22; height: 22
+                        radius: 6
+                        color: closeMa.containsMouse ? brand.raised : "transparent"
+                        Layout.alignment: Qt.AlignVCenter
 
-                            Text {
-                                text: root.displayText + root.displaySymbol
-                                color: "#FFFFFF"
-                                font.pixelSize: 14
-                                font.bold: true
-                                anchors.right: parent.right
-                                horizontalAlignment: Text.AlignRight
-                            }
-                            Text {
-                                visible: root.holdPositive
-                                text: "hold " + root.displayHold + root.displaySymbol
-                                color: "#707070"
-                                font.pixelSize: 10
-                                anchors.right: parent.right
-                                horizontalAlignment: Text.AlignRight
-                            }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\u2715"
+                            color: closeMa.containsMouse ? brand.text : brand.subtext
+                            font.pixelSize: 12
+                        }
+                        MouseArea {
+                            id: closeMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: transferDialog.visible = false
                         }
                     }
                 }
 
+                Rectangle { Layout.fillWidth: true; height: 1; color: brand.border }
+
                 // ── Amount ──────────────────────────────────────
-                // TextField fills the whole Rectangle so the entire 48px
-                // tall area is clickable — not just the centered text.
-                // Currency symbol overlays on the right inside the
-                // TextField's right padding.
+                Text {
+                    text: i18n("Amount")
+                    color: brand.subtext
+                    font.pixelSize: 11
+                    Layout.leftMargin: 2
+                }
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 48
-                    color: "#161616"
-                    radius: 6
+                    height: 42
+                    color: brand.surface
+                    radius: 8
                     border.width: 1
-                    border.color: amountField.activeFocus ? "#2BAD72" : "#262626"
+                    border.color: amountField.activeFocus ? brand.green : brand.border
 
                     QQC2.TextField {
                         id: amountField
                         anchors.fill: parent
-                        leftPadding: 16
-                        rightPadding: 40        // room for the currency symbol
+                        leftPadding: 14
+                        rightPadding: 38        // room for the currency symbol
                         topPadding: 0
                         bottomPadding: 0
                         verticalAlignment: TextInput.AlignVCenter
@@ -465,242 +480,271 @@ PlasmoidItem {
                             notation: DoubleValidator.StandardNotation
                         }
                         onTextChanged: root.transferAmount = text
-                        color: "#FFFFFF"
+                        color: brand.text
                         font.bold: true
-                        font.pixelSize: 17
+                        font.pixelSize: 16
                         background: Item {}
-                        placeholderTextColor: "#3a3a3a"
+                        placeholderTextColor: brand.muted
                     }
 
                     Text {
                         anchors.right: parent.right
-                        anchors.rightMargin: 16
+                        anchors.rightMargin: 14
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.currencySymbols[root.transferTargetCurrency] || root.transferTargetCurrency
-                        color: "#2BAD72"
+                        color: brand.green
                         font.bold: true
-                        font.pixelSize: 19
+                        font.pixelSize: 16
                     }
                 }
 
-                // ── Currency toggle: RUB / USD ──────────────────
+                // ── Quick amounts + currency pill ───────────────
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
 
                     Repeater {
                         model: [
-                            { code: "RUB", label: "₽  RUB" },
-                            { code: "USD", label: "$  USD" }
+                            { label: "10%", frac: 0.10 },
+                            { label: "50%", frac: 0.50 },
+                            { label: "Max", frac: 1.00 }
                         ]
 
                         delegate: Rectangle {
                             required property var modelData
-                            Layout.fillWidth: true
-                            height: 36
-                            radius: 6
-                            color:        root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#161616"
-                            border.color: root.transferTargetCurrency === modelData.code ? "#2BAD72" : "#262626"
+                            implicitWidth: chipText.implicitWidth + 22
+                            height: 26
+                            radius: 13
+                            color: chipMa.containsMouse ? brand.raised : brand.surface
+                            border.color: brand.border
                             border.width: 1
 
                             Text {
+                                id: chipText
                                 anchors.centerIn: parent
                                 text: modelData.label
-                                color: "#FFFFFF"
-                                opacity: root.transferTargetCurrency === modelData.code ? 1.0 : 0.5
-                                font.bold: true
-                                font.pixelSize: 12
-                                font.letterSpacing: 0.3
+                                color: brand.subtext
+                                font.pixelSize: 11
                             }
-
                             MouseArea {
+                                id: chipMa
                                 anchors.fill: parent
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root.transferTargetCurrency = modelData.code
+                                onClicked: root.setAmountFraction(modelData.frac)
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {
+                        Layout.preferredWidth: 116
+                        height: 26
+                        radius: 13
+                        color: brand.surface
+                        border.color: brand.border
+                        border.width: 1
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            spacing: 3
+
+                            Repeater {
+                                model: [ "RUB", "USD" ]
+
+                                delegate: Rectangle {
+                                    required property string modelData
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 10
+                                    color: root.transferTargetCurrency === modelData ? brand.green : "transparent"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.currencySymbols[modelData] || modelData
+                                        color: root.transferTargetCurrency === modelData ? "#ffffff" : brand.subtext
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.switchTransferCurrency(modelData)
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // ── By ID / By Username ─────────────────────────
+                // ── Recipient: ID/Username pill + field ─────────
+                Text {
+                    text: i18n("Recipient")
+                    color: brand.subtext
+                    font.pixelSize: 11
+                    Layout.leftMargin: 2
+                    Layout.topMargin: 2
+                }
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: 8
 
                     Rectangle {
-                        Layout.fillWidth: true
-                        height: 36
-                        radius: 6
-                        color:        root.transferUseId ? "#2BAD72" : "#161616"
-                        border.color: root.transferUseId ? "#2BAD72" : "#262626"
+                        Layout.preferredWidth: 150
+                        height: 34
+                        radius: 8
+                        color: brand.surface
+                        border.color: brand.border
                         border.width: 1
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "By ID"
-                            color: "#FFFFFF"
-                            opacity: root.transferUseId ? 1.0 : 0.5
-                            font.bold: true
-                            font.pixelSize: 12
-                            font.letterSpacing: 0.3
-                        }
-                        MouseArea {
+                        RowLayout {
                             anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.transferUseId = true
+                            anchors.margins: 3
+                            spacing: 3
+
+                            Repeater {
+                                model: [
+                                    { t: "By ID",  isId: true  },
+                                    { t: "Username", isId: false }
+                                ]
+
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 6
+                                    color: root.transferUseId === modelData.isId ? brand.green : "transparent"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: modelData.t
+                                        color: root.transferUseId === modelData.isId ? "#ffffff" : brand.subtext
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.transferUseId = modelData.isId
+                                    }
+                                }
+                            }
                         }
                     }
 
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 36
-                        radius: 6
-                        color:        !root.transferUseId ? "#2BAD72" : "#161616"
-                        border.color: !root.transferUseId ? "#2BAD72" : "#262626"
+                        height: 34
+                        color: brand.surface
+                        radius: 8
                         border.width: 1
+                        border.color: userField.activeFocus ? brand.green : brand.border
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "By Username"
-                            color: "#FFFFFF"
-                            opacity: !root.transferUseId ? 1.0 : 0.5
-                            font.bold: true
-                            font.pixelSize: 12
-                            font.letterSpacing: 0.3
-                        }
-                        MouseArea {
+                        QQC2.TextField {
+                            id: userField
                             anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.transferUseId = false
+                            leftPadding: 12
+                            rightPadding: 12
+                            topPadding: 0
+                            bottomPadding: 0
+                            verticalAlignment: TextInput.AlignVCenter
+                            placeholderText: root.transferUseId ? "123456" : "@username"
+                            onTextChanged: {
+                                if (root.transferUseId) root.transferUserId   = text
+                                else                    root.transferUsername = text
+                            }
+                            color: brand.text
+                            font.pixelSize: 12
+                            background: Item {}
+                            placeholderTextColor: brand.muted
                         }
-                    }
-                }
-
-                // ── Recipient ───────────────────────────────────
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 48
-                    color: "#161616"
-                    radius: 6
-                    border.width: 1
-                    border.color: userField.activeFocus ? "#2BAD72" : "#262626"
-
-                    QQC2.TextField {
-                        id: userField
-                        // Fill the whole Rectangle so the entire 48px area
-                        // is clickable. Horizontal padding gives the visual
-                        // text indent without creating a dead zone.
-                        anchors.fill: parent
-                        leftPadding: 16
-                        rightPadding: 16
-                        topPadding: 0
-                        bottomPadding: 0
-                        verticalAlignment: TextInput.AlignVCenter
-                        placeholderText: root.transferUseId ? "User ID" : "Username"
-                        onTextChanged: {
-                            if (root.transferUseId) root.transferUserId   = text
-                            else                    root.transferUsername = text
-                        }
-                        color: "#FFFFFF"
-                        font.bold: true
-                        font.pixelSize: 13
-                        background: Item {}
-                        placeholderTextColor: "#3a3a3a"
                     }
                 }
 
                 // ── Comment ─────────────────────────────────────
+                Text {
+                    text: i18n("Comment")
+                    color: brand.subtext
+                    font.pixelSize: 11
+                    Layout.leftMargin: 2
+                    Layout.topMargin: 2
+                }
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 48
-                    color: "#161616"
-                    radius: 6
+                    height: 34
+                    color: brand.surface
+                    radius: 8
                     border.width: 1
-                    border.color: commentField.activeFocus ? "#2BAD72" : "#262626"
+                    border.color: commentField.activeFocus ? brand.green : brand.border
 
                     QQC2.TextField {
                         id: commentField
                         anchors.fill: parent
-                        leftPadding: 16
-                        rightPadding: 16
+                        leftPadding: 12
+                        rightPadding: 12
                         topPadding: 0
                         bottomPadding: 0
                         verticalAlignment: TextInput.AlignVCenter
-                        placeholderText: "Comment (optional)"
+                        placeholderText: i18n("Optional")
                         maximumLength: 255
                         onTextChanged: root.transferComment = text
-                        color: "#FFFFFF"
-                        font.pixelSize: 13
+                        color: brand.text
+                        font.pixelSize: 12
                         background: Item {}
-                        placeholderTextColor: "#3a3a3a"
+                        placeholderTextColor: brand.muted
                     }
                 }
 
-                // ── Status (reserves a fixed slot so the dialog never
-                //   resizes mid-flight, which would push the Send button
-                //   off the bottom). Hidden via opacity (not `visible:`)
-                //   because invisible items drop out of the column layout
-                //   entirely. Slot is intentionally small — most status
-                //   messages are short and fit comfortably.
-                Rectangle {
+                // ── Status ──────────────────────────────────────
+                // Fixed-height slot so an error never resizes the dialog or
+                // pushes the Transfer button off the bottom; the text elides.
+                Item {
                     Layout.fillWidth: true
-                    height: 28
-                    opacity: root.transferStatus.length > 0 ? 1 : 0
-                    radius: 6
-                    color:        root.transferSuccess ? "#0d2618" : "#2a1010"
-                    border.color: root.transferSuccess ? "#2BAD72" : "#884444"
-                    border.width: 1
+                    Layout.preferredHeight: 18
 
                     Text {
-                        anchors.centerIn: parent
-                        anchors.left:   parent.left
-                        anchors.right:  parent.right
-                        anchors.margins: 10
+                        anchors.fill: parent
                         text: root.transferStatus
-                        color: root.transferSuccess ? "#2BAD72" : "#FFFFFF"
+                        color: root.transferSuccess ? brand.green : "#e0a0a0"
                         font.pixelSize: 11
                         font.bold: true
+                        verticalAlignment: Text.AlignVCenter
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
                     }
                 }
 
-                // ── Send ────────────────────────────────────────
+                // ── Primary action ──────────────────────────────
                 Rectangle {
+                    id: sendBtn
                     Layout.fillWidth: true
-                    height: 44
-                    radius: 6
-                    color: {
-                        if (root.pendingTransfer) return "#1a3d2b"
-                        if (amountField.text.length === 0 || userField.text.length === 0) return "#161616"
-                        return "#2BAD72"
-                    }
-                    border.color: {
-                        if (root.pendingTransfer) return "#2BAD72"
-                        if (amountField.text.length === 0 || userField.text.length === 0) return "#262626"
-                        return "#2BAD72"
-                    }
+                    Layout.topMargin: 2
+                    height: 40
+                    radius: 8
+                    readonly property bool ready: !root.pendingTransfer
+                        && amountField.text.length > 0 && userField.text.length > 0
+                    color: !ready ? brand.surface
+                                  : (sendMa.containsMouse ? "#25c07d" : brand.green)
                     border.width: 1
+                    border.color: root.pendingTransfer ? brand.green : "transparent"
 
                     Text {
                         anchors.centerIn: parent
-                        text: root.pendingTransfer ? "Sending..." : "Send"
-                        color: {
-                            if (root.pendingTransfer) return "#2BAD72"
-                            if (amountField.text.length === 0 || userField.text.length === 0) return "#404040"
-                            return "#FFFFFF"
-                        }
+                        text: root.pendingTransfer ? i18n("Sending…") : i18n("Transfer")
+                        color: sendBtn.ready ? "#ffffff" : brand.muted
                         font.bold: true
-                        font.pixelSize: 14
+                        font.pixelSize: 13
                         font.letterSpacing: 0.3
                     }
 
                     MouseArea {
+                        id: sendMa
                         anchors.fill: parent
-                        cursorShape: root.pendingTransfer ? Qt.WaitCursor : Qt.PointingHandCursor
-                        enabled: !root.pendingTransfer
-                            && amountField.text.length > 0
-                            && userField.text.length > 0
+                        hoverEnabled: true
+                        enabled: sendBtn.ready
+                        cursorShape: sendBtn.ready ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: root.sendTransfer()
                     }
                 }
@@ -841,6 +885,43 @@ PlasmoidItem {
         transferSuccess   = false
         transferUseId     = true
         transferTargetCurrency = "RUB"
+    }
+
+    // Transferable balance in the given currency (RUB balance converted by the
+    // live rate). Returns 0 when the balance or rate is unknown.
+    function transferAvailable(currency) {
+        var rub = parseFloat(rawBalance)
+        if (isNaN(rub) || rub <= 0) return 0
+        if (currency === "RUB") return rub
+        var rate = currencyRates[currency]
+        if (!rate || rate <= 0) return 0
+        return rub / rate
+    }
+
+    // Quick-amount chip: fill the field with `frac` of the transferable balance.
+    function setAmountFraction(frac) {
+        var max = transferAvailable(transferTargetCurrency)
+        if (max <= 0) return
+        var v = String(Math.floor(max * frac * 100) / 100)
+        amountField.text = v
+        transferAmount = v
+    }
+
+    // Switch the transfer currency while preserving the VALUE already typed:
+    // 100 ₽ -> "$1.19" -> back to "100 ₽". Skipped when rates are unknown.
+    function switchTransferCurrency(to) {
+        if (to === transferTargetCurrency) return
+        var amount = parseFloat(amountField.text)
+        if (!isNaN(amount) && amount > 0) {
+            var fromRate = (transferTargetCurrency === "RUB") ? 1 : currencyRates[transferTargetCurrency]
+            var toRate   = (to === "RUB") ? 1 : currencyRates[to]
+            if (fromRate > 0 && toRate > 0) {
+                var v = String(Math.floor(amount * fromRate / toRate * 100) / 100)
+                amountField.text = v
+                transferAmount = v
+            }
+        }
+        transferTargetCurrency = to
     }
 
     function rebuildCryptoEntries() {
